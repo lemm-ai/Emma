@@ -152,11 +152,21 @@ class EmmaUI:
             
             self.clip_library.add_clip(metadata)
             
-            return (settings.audio.sample_rate, audio_for_gradio), f"Music generated successfully! Clip ID: {clip_id}"
+            # Get updated info displays
+            clips_info = self.get_clip_library_info()
+            timeline_info = self.get_timeline_info()
+            
+            return (
+                (settings.audio.sample_rate, audio_for_gradio),  # audio_output
+                f"Music generated successfully! Clip ID: {clip_id}",  # status_text
+                (settings.audio.sample_rate, audio_for_gradio),  # enhance_audio_input
+                timeline_info,  # timeline_info
+                clips_info  # clips_info
+            )
             
         except Exception as e:
             logger.error(f"Error generating music: {e}")
-            return None, f"Error: {str(e)}"
+            return None, f"Error: {str(e)}", None, self.get_timeline_info(), self.get_clip_library_info()
     
     def apply_mastering(
         self,
@@ -176,6 +186,47 @@ class EmmaUI:
         except Exception as e:
             logger.error(f"Error applying mastering: {e}")
             return None, f"Error: {str(e)}"
+    
+    def get_clip_library_info(self) -> str:
+        """Get formatted clip library information"""
+        try:
+            clips = self.clip_library.search_clips("")  # Empty string returns all clips
+            if not clips:
+                return "No clips yet. Generate music to see clips here."
+            
+            info_lines = []
+            for clip in clips:
+                info_lines.append(f"ID: {clip.clip_id}")
+                info_lines.append(f"Name: {clip.name}")
+                info_lines.append(f"Prompt: {clip.prompt}")
+                info_lines.append(f"Duration: {clip.duration:.2f}s")
+                info_lines.append(f"Created: {clip.created_at}")
+                info_lines.append("---")
+            
+            return "\n".join(info_lines)
+        except Exception as e:
+            logger.error(f"Error getting clip library info: {e}")
+            return f"Error loading clips: {str(e)}"
+    
+    def get_timeline_info(self) -> str:
+        """Get formatted timeline information"""
+        try:
+            timeline_data = self.timeline.get_info()
+            if not timeline_data or not timeline_data.get('clips'):
+                return "Timeline is empty. Generate music and it will be added automatically."
+            
+            info_lines = [f"Total Duration: {timeline_data.get('total_duration', 0):.2f}s"]
+            info_lines.append(f"Number of Clips: {timeline_data.get('num_clips', 0)}")
+            info_lines.append("\nClips:")
+            
+            for clip in timeline_data['clips']:
+                clip_name = clip.get('id', 'Unknown')[:8]  # Short ID
+                info_lines.append(f"  - {clip_name} ({clip.get('duration', 0):.2f}s at {clip.get('start_time', 0):.2f}s)")
+            
+            return "\n".join(info_lines)
+        except Exception as e:
+            logger.error(f"Error getting timeline info: {e}")
+            return f"Error loading timeline: {str(e)}"
     
     def create_interface(self) -> gr.Blocks:
         """Create the Gradio interface"""
@@ -238,19 +289,6 @@ class EmmaUI:
                         gr.Markdown("### Output")
                         audio_output = gr.Audio(label="Generated Music")
                         status_text = gr.Textbox(label="Status", interactive=False)
-                
-                # Connect buttons
-                gen_lyrics_btn.click(
-                    fn=self.generate_lyrics,
-                    inputs=[prompt_input],
-                    outputs=[lyrics_input]
-                )
-                
-                generate_btn.click(
-                    fn=gpu_generate_music,
-                    inputs=[prompt_input, lyrics_input, timeline_position, auto_lyrics_check],
-                    outputs=[audio_output, status_text]
-                )
             
             with gr.Tab("🎚️ Audio Enhancement"):
                 with gr.Row():
@@ -273,16 +311,9 @@ class EmmaUI:
                     with gr.Column():
                         enhanced_output = gr.Audio(label="Enhanced Audio")
                         enhance_status = gr.Textbox(label="Status", interactive=False)
-                
-                apply_mastering_btn.click(
-                    fn=gpu_apply_mastering,
-                    inputs=[enhance_audio_input, mastering_preset],
-                    outputs=[enhanced_output, enhance_status]
-                )
             
             with gr.Tab("📚 Clip Library"):
                 gr.Markdown("### Your Generated Clips")
-                gr.Markdown("*Clip library features will be available once models are integrated*")
                 
                 with gr.Row():
                     search_box = gr.Textbox(label="Search clips", placeholder="Search by name or prompt...")
@@ -313,6 +344,25 @@ class EmmaUI:
                 timeline_audio = gr.Audio(label="Timeline Preview")
                 
                 export_output = gr.File(label="Download", interactive=False, file_count="single")
+            
+            # Connect button callbacks after all components are defined
+            gen_lyrics_btn.click(
+                fn=self.generate_lyrics,
+                inputs=[prompt_input],
+                outputs=[lyrics_input]
+            )
+            
+            generate_btn.click(
+                fn=gpu_generate_music,
+                inputs=[prompt_input, lyrics_input, timeline_position, auto_lyrics_check],
+                outputs=[audio_output, status_text, enhance_audio_input, timeline_info, clips_info]
+            )
+            
+            apply_mastering_btn.click(
+                fn=gpu_apply_mastering,
+                inputs=[enhance_audio_input, mastering_preset],
+                outputs=[enhanced_output, enhance_status]
+            )
             
             with gr.Tab("ℹ️ About"):
                 gr.Markdown("""
