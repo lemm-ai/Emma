@@ -48,8 +48,8 @@ data/
 *.db
 *.sqlite
 
-# Model weights
-models/
+# Model weights (in root directory only, not src/models/)
+/models/
 checkpoints/
 weights/
 
