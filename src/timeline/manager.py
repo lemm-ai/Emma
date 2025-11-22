@@ -65,10 +65,13 @@ class TimelineManager:
         
         # Convert numpy array to AudioSegment
         logger.info(f"add_clip - Converting audio with shape: {audio.shape}")
+        print(f"[DEBUG] add_clip - Converting audio with shape: {audio.shape}")
         audio_segment = self._numpy_to_audiosegment(audio)
         logger.info(f"add_clip - AudioSegment length: {len(audio_segment)}ms")
+        print(f"[DEBUG] add_clip - AudioSegment length: {len(audio_segment)}ms")
         duration = len(audio_segment) / 1000.0  # Convert ms to seconds
         logger.info(f"add_clip - Calculated duration: {duration} seconds")
+        print(f"[DEBUG] add_clip - Calculated duration: {duration} seconds")
         
         # Determine start time based on position
         if position == "intro":
@@ -250,14 +253,17 @@ class TimelineManager:
     def _numpy_to_audiosegment(self, audio: np.ndarray) -> AudioSegment:
         """Convert numpy array to AudioSegment"""
         logger.info(f"Converting audio to AudioSegment - input shape: {audio.shape}, dtype: {audio.dtype}")
+        print(f"[DEBUG] Converting audio to AudioSegment - input shape: {audio.shape}, dtype: {audio.dtype}")
         
         # Ensure audio is in (samples, channels) format
         if audio.ndim == 2 and audio.shape[0] < audio.shape[1]:
             # If (channels, samples), transpose to (samples, channels)
             logger.info(f"Transposing from (channels, samples) to (samples, channels)")
+            print(f"[DEBUG] Transposing from (channels, samples) to (samples, channels)")
             audio = audio.T
         
         logger.info(f"After transpose check - shape: {audio.shape}")
+        print(f"[DEBUG] After transpose check - shape: {audio.shape}")
         
         # Ensure audio is in correct format
         if audio.dtype != np.int16:
@@ -272,6 +278,8 @@ class TimelineManager:
             audio = np.stack([audio, audio], axis=1)
         
         logger.info(f"Final audio shape before AudioSegment: {audio.shape}, dtype: {audio.dtype}")
+        print(f"[DEBUG] Final audio shape before AudioSegment: {audio.shape}, dtype: {audio.dtype}")
+        print(f"[DEBUG] sample_rate={self.sample_rate}, sample_width={audio.dtype.itemsize}, channels=2")
         
         # Create AudioSegment
         audio_segment = AudioSegment(
@@ -282,6 +290,7 @@ class TimelineManager:
         )
         
         logger.info(f"AudioSegment created - duration: {len(audio_segment)}ms")
+        print(f"[DEBUG] AudioSegment created - duration: {len(audio_segment)}ms")
         
         return audio_segment
     
