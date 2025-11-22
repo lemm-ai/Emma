@@ -283,7 +283,7 @@ class EmmaUI:
                 
                 timeline_audio = gr.Audio(label="Timeline Preview")
                 
-                export_output = gr.File(label="Download")
+                export_output = gr.File(label="Download", interactive=False, file_count="single")
             
             with gr.Tab("ℹ️ About"):
                 gr.Markdown("""

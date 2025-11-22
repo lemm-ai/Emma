@@ -27,11 +27,16 @@ class StemSeparator(BaseModel):
         try:
             logger.info(f"Loading Demucs model: {self.model_name}...")
             
-            # TODO: Implement actual Demucs loading
-            # from demucs.pretrained import get_model
-            # self.model = get_model(self.model_name)
-            # self.model = self.model.to(self.device)
-            # self.model.eval()
+            import torch
+            from demucs.pretrained import get_model
+            from demucs.apply import apply_model
+            
+            self.model = get_model(self.model_name)
+            self.model = self.model.to(self.device)
+            self.model.eval()
+            
+            # Store apply function for later use
+            self.apply_fn = apply_model
             
             self.is_loaded = True
             logger.info("Demucs model loaded successfully")
@@ -52,7 +57,7 @@ class StemSeparator(BaseModel):
         Separate audio into stems
         
         Args:
-            audio: Input audio as numpy array
+            audio: Input audio as numpy array (channels, samples)
             sample_rate: Sample rate of audio
             
         Returns:
@@ -64,21 +69,27 @@ class StemSeparator(BaseModel):
         try:
             logger.info("Separating audio into stems...")
             
-            # TODO: Implement actual Demucs inference
-            # import torch
-            # audio_tensor = torch.from_numpy(audio).float().to(self.device)
-            # 
-            # with torch.no_grad():
-            #     stems = self.model(audio_tensor)
-            # 
-            # result = {}
-            # for i, stem_name in enumerate(self.stem_names):
-            #     result[stem_name] = stems[i].cpu().numpy()
+            import torch
             
-            # Placeholder: return empty stems
+            # Ensure audio is in correct format (channels, samples)
+            if audio.ndim == 1:
+                audio = audio[np.newaxis, :]
+            elif audio.ndim == 2 and audio.shape[0] > audio.shape[1]:
+                # Transpose if (samples, channels)
+                audio = audio.T
+            
+            # Convert to tensor
+            audio_tensor = torch.from_numpy(audio).float().unsqueeze(0).to(self.device)
+            
+            # Apply model
+            with torch.no_grad():
+                stems = self.apply_fn(self.model, audio_tensor, device=self.device)
+            
+            # Convert results to numpy
             result = {}
-            for stem_name in self.stem_names:
-                result[stem_name] = np.zeros_like(audio)
+            stems = stems.squeeze(0).cpu().numpy()
+            for i, stem_name in enumerate(self.stem_names):
+                result[stem_name] = stems[i]
             
             logger.info("Stem separation complete")
             return result

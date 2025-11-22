@@ -25,6 +25,8 @@ class BaseModel(ABC):
         self.model_path = model_path
         self.device = self._get_device(device)
         self.model = None
+        self.tokenizer = None  # For models that need tokenizers
+        self.processor = None  # For models that need processors
         self.is_loaded = False
         
     def _get_device(self, device_str: str) -> torch.device:

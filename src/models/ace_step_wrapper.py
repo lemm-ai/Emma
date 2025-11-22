@@ -25,21 +25,25 @@ class ACEStepModel(BaseModel):
         self.core_duration = 28  # Core audio duration
         
     def load(self) -> None:
-        """Load ACE-Step model"""
+        """Load music generation model"""
         try:
-            # TODO: Implement actual ACE-Step model loading
-            # This is a placeholder for the actual implementation
-            logger.info("Loading ACE-Step model...")
+            logger.info("Loading music generation model...")
             
-            # Example:
-            # from acestep import ACEStepGenerator
-            # self.model = ACEStepGenerator.from_pretrained(self.model_path)
-            # self.model = self.model.to(self.device)
+            from transformers import AutoProcessor, MusicgenForConditionalGeneration
+            import torch
+            
+            # Use Facebook's MusicGen model as the base
+            model_name = self.model_path or "facebook/musicgen-small"
+            
+            self.processor = AutoProcessor.from_pretrained(model_name)
+            self.model = MusicgenForConditionalGeneration.from_pretrained(model_name)
+            self.model = self.model.to(self.device)
+            self.model.eval()
             
             self.is_loaded = True
-            logger.info("ACE-Step model loaded successfully")
+            logger.info("Music generation model loaded successfully")
         except Exception as e:
-            logger.error(f"Error loading ACE-Step model: {e}")
+            logger.error(f"Error loading music generation model: {e}")
             raise
     
     def unload(self) -> None:
@@ -62,12 +66,12 @@ class ACEStepModel(BaseModel):
         
         Args:
             prompt: Text prompt for music generation
-            lyrics: Optional lyrics text
+            lyrics: Optional lyrics text (will be combined with prompt)
             duration: Target duration in seconds
             **kwargs: Additional generation parameters
             
         Returns:
-            Generated audio as numpy array
+            Generated audio as numpy array (channels, samples)
         """
         if not self.is_loaded:
             raise RuntimeError("Model not loaded. Call load() first.")
@@ -75,20 +79,42 @@ class ACEStepModel(BaseModel):
         try:
             logger.info(f"Generating music with prompt: {prompt[:50]}...")
             
-            # TODO: Implement actual ACE-Step inference
-            # This is a placeholder for the actual implementation
+            import torch
             
-            # Example:
-            # audio = self.model.generate(
-            #     prompt=prompt,
-            #     lyrics=lyrics,
-            #     duration=duration,
-            #     **kwargs
-            # )
+            # Combine prompt with lyrics if provided
+            full_prompt = prompt
+            if lyrics:
+                full_prompt = f"{prompt}. Lyrics: {lyrics[:200]}"  # Limit lyrics length
             
-            # Placeholder: return silent audio
-            sample_rate = 48000
-            audio = np.zeros((duration * sample_rate, 2), dtype=np.float32)
+            # Process input
+            inputs = self.processor(
+                text=[full_prompt],
+                padding=True,
+                return_tensors="pt",
+            ).to(self.device)
+            
+            # Calculate number of tokens needed for duration
+            # MusicGen generates at 50 Hz, so tokens = duration * 50
+            max_new_tokens = int(duration * 50)
+            
+            # Generate music
+            with torch.no_grad():
+                audio_values = self.model.generate(
+                    **inputs,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=True,
+                    guidance_scale=3.0,
+                    **kwargs
+                )
+            
+            # Convert to numpy and reshape
+            audio = audio_values[0].cpu().numpy()
+            
+            # Ensure stereo output
+            if audio.ndim == 1:
+                audio = np.stack([audio, audio])  # Mono to stereo
+            elif audio.shape[0] == 1:
+                audio = np.repeat(audio, 2, axis=0)
             
             logger.info("Music generation complete")
             return audio

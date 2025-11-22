@@ -13,6 +13,13 @@ from ..models.lyrics_generator import LyricsGenerator
 from ..models.stem_separator import StemSeparator
 from ..config.settings import settings
 
+# Import spaces for GPU decoration
+try:
+    import spaces
+    HAS_SPACES = True
+except ImportError:
+    HAS_SPACES = False
+
 logger = logging.getLogger(__name__)
 
 
