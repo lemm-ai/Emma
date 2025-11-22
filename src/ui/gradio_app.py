@@ -160,18 +160,27 @@ class EmmaUI:
             # Get updated info displays
             clips_info = self.get_clip_library_info()
             timeline_info = self.get_timeline_info()
+            timeline_clips = self.get_timeline_clips_dataframe()
             
             return (
                 (settings.audio.sample_rate, audio_for_gradio),  # audio_output
                 f"Music generated successfully! Clip ID: {clip_id}",  # status_text
                 (settings.audio.sample_rate, audio_for_gradio),  # enhance_audio_input
                 timeline_info,  # timeline_info
-                clips_info  # clips_info
+                clips_info,  # clips_dataframe
+                timeline_clips  # timeline_clips_df
             )
             
         except Exception as e:
             logger.error(f"Error generating music: {e}")
-            return None, f"Error: {str(e)}", None, self.get_timeline_info(), self.get_clip_library_info()
+            return (
+                None, 
+                f"Error: {str(e)}", 
+                None, 
+                self.get_timeline_info(), 
+                self.get_clip_library_info(),
+                self.get_timeline_clips_dataframe()
+            )
     
     def apply_mastering(
         self,
@@ -184,12 +193,89 @@ class EmmaUI:
                 return None, "No audio to process. Generate music first."
             
             sample_rate, audio = audio_input
+            
+            # Convert to float32 for Pedalboard (only supports float32/float64)
+            if audio.dtype not in [np.float32, np.float64]:
+                if audio.dtype == np.int16:
+                    audio = audio.astype(np.float32) / 32768.0
+                elif audio.dtype == np.int32:
+                    audio = audio.astype(np.float32) / 2147483648.0
+                else:
+                    audio = audio.astype(np.float32)
+            
             processed = self.audio_enhancer.apply_mastering_preset(audio, preset.lower())
             
             return (sample_rate, processed), f"Applied {preset} mastering"
             
         except Exception as e:
             logger.error(f"Error applying mastering: {e}")
+            return None, f"Error: {str(e)}"
+    
+    def apply_custom_effects(
+        self,
+        audio_input,
+        low_shelf_gain, low_shelf_freq,
+        mid1_gain, mid1_freq, mid1_q,
+        mid2_gain, mid2_freq, mid2_q,
+        high_shelf_gain, high_shelf_freq,
+        comp_threshold, comp_ratio, comp_attack, comp_release,
+        reverb_room, reverb_damping, reverb_wet,
+        delay_time, delay_feedback, delay_mix,
+        chorus_rate, chorus_depth, chorus_mix,
+        distortion_drive, gain_db,
+        limiter_threshold, limiter_release
+    ):
+        """Apply custom EQ and effects"""
+        try:
+            if audio_input is None:
+                return None, "No audio to process. Generate music first."
+            
+            sample_rate, audio = audio_input
+            
+            # Convert to float32 for Pedalboard (only supports float32/float64)
+            if audio.dtype not in [np.float32, np.float64]:
+                if audio.dtype == np.int16:
+                    audio = audio.astype(np.float32) / 32768.0
+                elif audio.dtype == np.int32:
+                    audio = audio.astype(np.float32) / 2147483648.0
+                else:
+                    audio = audio.astype(np.float32)
+            
+            processed = self.audio_enhancer.apply_custom_eq_and_effects(
+                audio,
+                low_shelf_gain=low_shelf_gain,
+                low_shelf_freq=low_shelf_freq,
+                mid1_gain=mid1_gain,
+                mid1_freq=mid1_freq,
+                mid1_q=mid1_q,
+                mid2_gain=mid2_gain,
+                mid2_freq=mid2_freq,
+                mid2_q=mid2_q,
+                high_shelf_gain=high_shelf_gain,
+                high_shelf_freq=high_shelf_freq,
+                compressor_threshold=comp_threshold,
+                compressor_ratio=comp_ratio,
+                compressor_attack=comp_attack,
+                compressor_release=comp_release,
+                reverb_room_size=reverb_room,
+                reverb_damping=reverb_damping,
+                reverb_wet_level=reverb_wet,
+                delay_seconds=delay_time,
+                delay_feedback=delay_feedback,
+                delay_mix=delay_mix,
+                chorus_rate=chorus_rate,
+                chorus_depth=chorus_depth,
+                chorus_mix=chorus_mix,
+                distortion_drive=distortion_drive,
+                gain_db=gain_db,
+                limiter_threshold=limiter_threshold,
+                limiter_release=limiter_release
+            )
+            
+            return (sample_rate, processed), "Applied custom EQ and effects"
+            
+        except Exception as e:
+            logger.error(f"Error applying custom effects: {e}")
             return None, f"Error: {str(e)}"
     
     def get_clip_library_info(self):
@@ -224,16 +310,113 @@ class EmmaUI:
             
             info_lines = [f"Total Duration: {timeline_data.get('total_duration', 0):.2f}s"]
             info_lines.append(f"Number of Clips: {timeline_data.get('num_clips', 0)}")
-            info_lines.append("\nClips:")
-            
-            for clip in timeline_data['clips']:
-                clip_name = clip.get('id', 'Unknown')[:8]  # Short ID
-                info_lines.append(f"  - {clip_name} ({clip.get('duration', 0):.2f}s at {clip.get('start_time', 0):.2f}s)")
             
             return "\n".join(info_lines)
         except Exception as e:
             logger.error(f"Error getting timeline info: {e}")
             return f"Error loading timeline: {str(e)}"
+    
+    def get_timeline_clips_dataframe(self):
+        """Get timeline clips as DataFrame data"""
+        try:
+            timeline_data = self.timeline.get_info()
+            if not timeline_data or not timeline_data.get('clips'):
+                return []
+            
+            # Return data as list of lists for DataFrame
+            data = []
+            for i, clip in enumerate(timeline_data['clips']):
+                clip_name = clip.get('id', 'Unknown')[:8] + "..."
+                start_time = clip.get('start_time', 0)
+                duration = clip.get('duration', 0)
+                end_time = start_time + duration
+                data.append([
+                    f"Track {i+1}",  # Track number
+                    clip_name,
+                    f"{start_time:.2f}",
+                    f"{duration:.2f}",
+                    f"{end_time:.2f}"
+                ])
+            
+            return data
+        except Exception as e:
+            logger.error(f"Error getting timeline clips dataframe: {e}")
+            return []
+    
+    def upload_to_timeline(self, audio_file):
+        """Upload audio file and add to timeline"""
+        try:
+            if audio_file is None:
+                return self.get_timeline_info(), self.get_timeline_clips_dataframe(), "No file uploaded"
+            
+            # Load audio file
+            import soundfile as sf
+            audio, sample_rate = sf.read(audio_file)
+            
+            # Resample if needed
+            from ..config.settings import Settings
+            settings = Settings()
+            if sample_rate != settings.audio.sample_rate:
+                from scipy import signal
+                num_samples = int(len(audio) * settings.audio.sample_rate / sample_rate)
+                audio = signal.resample(audio, num_samples)
+                sample_rate = settings.audio.sample_rate
+            
+            # Ensure correct format (channels, samples)
+            if audio.ndim == 1:
+                # Mono to stereo
+                audio = np.stack([audio, audio], axis=0)
+            elif audio.ndim == 2:
+                # Check if it's (samples, channels) and transpose to (channels, samples)
+                if audio.shape[1] == 2 and audio.shape[0] > audio.shape[1]:
+                    audio = audio.T
+            
+            # Add to timeline at the end
+            import os
+            filename = os.path.basename(audio_file)
+            clip_id = self.timeline.add_clip(
+                audio=audio,
+                position="outro",  # Add at the end
+                metadata={'prompt': f"Uploaded: {filename}"}
+            )
+            
+            # Also add to clip library
+            output_path = f"output/clips/upload_{clip_id}.wav"
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            sf.write(output_path, audio.T if audio.shape[0] == 2 else audio, sample_rate)
+            
+            from ..clip_library.database import ClipMetadata
+            metadata = ClipMetadata(
+                clip_id=clip_id,
+                name=filename,
+                prompt=f"Uploaded file: {filename}",
+                lyrics="",
+                duration=audio.shape[1] / sample_rate if audio.ndim == 2 else len(audio) / sample_rate,
+                bpm=None,
+                key=None,
+                genre=None,
+                mood=None,
+                created_at=datetime.now().isoformat(),
+                file_path=output_path,
+                tags=["uploaded"],
+                custom_data={}
+            )
+            
+            self.clip_library.add_clip(metadata)
+            
+            return (
+                self.get_timeline_info(),
+                self.get_timeline_clips_dataframe(),
+                f"Successfully added '{filename}' to timeline and library!"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error uploading to timeline: {e}")
+            return (
+                self.get_timeline_info(),
+                self.get_timeline_clips_dataframe(),
+                f"Error: {str(e)}"
+            )
     
     def create_interface(self) -> gr.Blocks:
         """Create the Gradio interface"""
@@ -302,6 +485,7 @@ class EmmaUI:
                     with gr.Column():
                         enhance_audio_input = gr.Audio(label="Audio Input")
                         
+                        gr.Markdown("### Quick Mastering Presets")
                         mastering_preset = gr.Dropdown(
                             choices=[
                                 "Balanced", "Bright", "Warm", "Punchy", "Soft",
@@ -314,6 +498,55 @@ class EmmaUI:
                         )
                         
                         apply_mastering_btn = gr.Button("Apply Mastering", variant="primary")
+                        
+                        gr.Markdown("### Custom EQ & Effects")
+                        
+                        with gr.Accordion("🎛️ Equalizer", open=False):
+                            with gr.Row():
+                                low_shelf_gain = gr.Slider(-12, 12, 0, step=0.5, label="Low Shelf Gain (dB)")
+                                low_shelf_freq = gr.Slider(20, 500, 100, step=10, label="Low Shelf Freq (Hz)")
+                            with gr.Row():
+                                mid1_gain = gr.Slider(-12, 12, 0, step=0.5, label="Mid 1 Gain (dB)")
+                                mid1_freq = gr.Slider(200, 2000, 500, step=50, label="Mid 1 Freq (Hz)")
+                                mid1_q = gr.Slider(0.1, 10, 1.0, step=0.1, label="Mid 1 Q")
+                            with gr.Row():
+                                mid2_gain = gr.Slider(-12, 12, 0, step=0.5, label="Mid 2 Gain (dB)")
+                                mid2_freq = gr.Slider(1000, 8000, 2000, step=100, label="Mid 2 Freq (Hz)")
+                                mid2_q = gr.Slider(0.1, 10, 1.0, step=0.1, label="Mid 2 Q")
+                            with gr.Row():
+                                high_shelf_gain = gr.Slider(-12, 12, 0, step=0.5, label="High Shelf Gain (dB)")
+                                high_shelf_freq = gr.Slider(2000, 16000, 8000, step=500, label="High Shelf Freq (Hz)")
+                        
+                        with gr.Accordion("🎚️ Dynamics", open=False):
+                            with gr.Row():
+                                comp_threshold = gr.Slider(-60, 0, -20, step=1, label="Compressor Threshold (dB)")
+                                comp_ratio = gr.Slider(1, 20, 4, step=0.5, label="Compressor Ratio")
+                            with gr.Row():
+                                comp_attack = gr.Slider(0.1, 100, 5, step=0.5, label="Attack (ms)")
+                                comp_release = gr.Slider(10, 1000, 100, step=10, label="Release (ms)")
+                        
+                        with gr.Accordion("🌊 Reverb", open=False):
+                            reverb_room = gr.Slider(0, 1, 0, step=0.01, label="Room Size")
+                            reverb_damping = gr.Slider(0, 1, 0.5, step=0.01, label="Damping")
+                            reverb_wet = gr.Slider(0, 1, 0, step=0.01, label="Wet Level")
+                        
+                        with gr.Accordion("🔁 Delay", open=False):
+                            delay_time = gr.Slider(0, 2, 0, step=0.01, label="Delay Time (s)")
+                            delay_feedback = gr.Slider(0, 0.95, 0, step=0.05, label="Feedback")
+                            delay_mix = gr.Slider(0, 1, 0, step=0.01, label="Mix")
+                        
+                        with gr.Accordion("🎭 Modulation", open=False):
+                            chorus_rate = gr.Slider(0.1, 10, 1, step=0.1, label="Chorus Rate (Hz)")
+                            chorus_depth = gr.Slider(0, 1, 0, step=0.01, label="Chorus Depth")
+                            chorus_mix = gr.Slider(0, 1, 0, step=0.01, label="Chorus Mix")
+                        
+                        with gr.Accordion("🔥 Distortion & Output", open=False):
+                            distortion_drive = gr.Slider(1, 25, 1, step=0.5, label="Distortion Drive")
+                            gain_db = gr.Slider(-20, 20, 0, step=0.5, label="Output Gain (dB)")
+                            limiter_threshold = gr.Slider(-20, 0, -1, step=0.5, label="Limiter Threshold (dB)")
+                            limiter_release = gr.Slider(10, 500, 50, step=10, label="Limiter Release (ms)")
+                        
+                        apply_custom_fx_btn = gr.Button("Apply Custom EQ & Effects", variant="secondary")
                         
                     with gr.Column():
                         enhanced_output = gr.Audio(label="Enhanced Audio")
@@ -342,18 +575,39 @@ class EmmaUI:
                 load_status = gr.Textbox(label="Status", interactive=False, visible=False)
             
             with gr.Tab("⏱️ Timeline"):
-                gr.Markdown("### Song Timeline")
-                
-                timeline_info = gr.Textbox(label="Timeline Info", lines=10, interactive=False)
+                gr.Markdown("### DAW Timeline - Arrange Your Clips")
                 
                 with gr.Row():
-                    refresh_timeline_btn = gr.Button("Refresh Timeline")
-                    clear_timeline_btn = gr.Button("Clear Timeline", variant="stop")
-                    export_timeline_btn = gr.Button("Export Song", variant="primary")
+                    with gr.Column(scale=3):
+                        # Timeline visualization (using DataFrame for now, can be enhanced with custom HTML/JS)
+                        timeline_clips_df = gr.Dataframe(
+                            headers=["Track", "Clip Name", "Start (s)", "Duration (s)", "End (s)"],
+                            datatype=["str", "str", "number", "number", "number"],
+                            label="Timeline Clips",
+                            interactive=False,
+                            wrap=True,
+                            row_count=10
+                        )
+                        
+                        timeline_info = gr.Textbox(label="Timeline Info", lines=5, interactive=False)
+                        
+                    with gr.Column(scale=1):
+                        gr.Markdown("### Controls")
+                        
+                        # Upload audio to add to timeline
+                        upload_audio = gr.Audio(label="Upload Audio File", type="filepath")
+                        upload_to_timeline_btn = gr.Button("➕ Add Upload to Timeline", variant="secondary")
+                        
+                        refresh_timeline_btn = gr.Button("🔄 Refresh Timeline")
+                        clear_timeline_btn = gr.Button("🗑️ Clear Timeline", variant="stop")
+                        
+                        gr.Markdown("---")
+                        
+                        export_timeline_btn = gr.Button("📥 Export Song", variant="primary", size="lg")
+                        export_output = gr.File(label="Download", interactive=False, file_count="single")
                 
-                timeline_audio = gr.Audio(label="Timeline Preview")
-                
-                export_output = gr.File(label="Download", interactive=False, file_count="single")
+                timeline_audio = gr.Audio(label="Timeline Preview (Full Song)")
+                upload_status = gr.Textbox(label="Status", interactive=False, visible=False)
             
             # Connect button callbacks after all components are defined
             gen_lyrics_btn.click(
@@ -365,13 +619,37 @@ class EmmaUI:
             generate_btn.click(
                 fn=gpu_generate_music,
                 inputs=[prompt_input, lyrics_input, timeline_position, auto_lyrics_check],
-                outputs=[audio_output, status_text, enhance_audio_input, timeline_info, clips_dataframe]
+                outputs=[audio_output, status_text, enhance_audio_input, timeline_info, clips_dataframe, timeline_clips_df]
             )
             
             apply_mastering_btn.click(
                 fn=gpu_apply_mastering,
                 inputs=[enhance_audio_input, mastering_preset],
                 outputs=[enhanced_output, enhance_status]
+            )
+            
+            apply_custom_fx_btn.click(
+                fn=self.apply_custom_effects,
+                inputs=[
+                    enhance_audio_input,
+                    low_shelf_gain, low_shelf_freq,
+                    mid1_gain, mid1_freq, mid1_q,
+                    mid2_gain, mid2_freq, mid2_q,
+                    high_shelf_gain, high_shelf_freq,
+                    comp_threshold, comp_ratio, comp_attack, comp_release,
+                    reverb_room, reverb_damping, reverb_wet,
+                    delay_time, delay_feedback, delay_mix,
+                    chorus_rate, chorus_depth, chorus_mix,
+                    distortion_drive, gain_db,
+                    limiter_threshold, limiter_release
+                ],
+                outputs=[enhanced_output, enhance_status]
+            )
+            
+            upload_to_timeline_btn.click(
+                fn=self.upload_to_timeline,
+                inputs=[upload_audio],
+                outputs=[timeline_info, timeline_clips_df, upload_status]
             )
             
             with gr.Tab("ℹ️ About"):

@@ -10,16 +10,19 @@ try:
     from pedalboard import (
         Pedalboard,
         Compressor,
-    Gain,
-    Reverb,
-    Delay,
-    Chorus,
-    Phaser,
-    Distortion,
-    LadderFilter,
-    Limiter,
-    HighpassFilter,
-    LowpassFilter,
+        Gain,
+        Reverb,
+        Delay,
+        Chorus,
+        Phaser,
+        Distortion,
+        LadderFilter,
+        Limiter,
+        HighpassFilter,
+        LowpassFilter,
+        HighShelfFilter,
+        LowShelfFilter,
+        PeakFilter,
     )
 except ImportError:
     from pedalboard._pedalboard import (
@@ -35,6 +38,9 @@ except ImportError:
         Limiter,
         HighpassFilter,
         LowpassFilter,
+        HighShelfFilter,
+        LowShelfFilter,
+        PeakFilter,
     )
 
 logger = logging.getLogger(__name__)
@@ -282,4 +288,103 @@ class AudioEnhancer:
                 board.append(Limiter(**params))
             # Add more effect types as needed
         
+        return board(audio, self.sample_rate)
+    
+    def apply_custom_eq_and_effects(
+        self,
+        audio: np.ndarray,
+        # EQ parameters
+        low_shelf_gain: float = 0.0,  # dB, -12 to +12
+        low_shelf_freq: float = 100.0,  # Hz
+        mid1_gain: float = 0.0,  # dB, -12 to +12
+        mid1_freq: float = 500.0,  # Hz
+        mid1_q: float = 1.0,  # 0.1 to 10
+        mid2_gain: float = 0.0,  # dB, -12 to +12
+        mid2_freq: float = 2000.0,  # Hz
+        mid2_q: float = 1.0,  # 0.1 to 10
+        high_shelf_gain: float = 0.0,  # dB, -12 to +12
+        high_shelf_freq: float = 8000.0,  # Hz
+        # Effects parameters
+        compressor_threshold: float = -20.0,  # dB
+        compressor_ratio: float = 4.0,  # ratio
+        compressor_attack: float = 5.0,  # ms
+        compressor_release: float = 100.0,  # ms
+        reverb_room_size: float = 0.0,  # 0.0 to 1.0
+        reverb_damping: float = 0.5,  # 0.0 to 1.0
+        reverb_wet_level: float = 0.0,  # 0.0 to 1.0
+        delay_seconds: float = 0.0,  # seconds, 0.0 to 2.0
+        delay_feedback: float = 0.0,  # 0.0 to 1.0
+        delay_mix: float = 0.0,  # 0.0 to 1.0
+        chorus_rate: float = 1.0,  # Hz
+        chorus_depth: float = 0.0,  # 0.0 to 1.0
+        chorus_mix: float = 0.0,  # 0.0 to 1.0
+        distortion_drive: float = 1.0,  # 1.0 to 25.0
+        gain_db: float = 0.0,  # dB, -20 to +20
+        limiter_threshold: float = -1.0,  # dB
+        limiter_release: float = 50.0,  # ms
+    ) -> np.ndarray:
+        """
+        Apply custom EQ and effects chain to audio
+        
+        Args:
+            audio: Input audio
+            Various EQ and effects parameters (see parameter list above)
+            
+        Returns:
+            Processed audio
+        """
+        board_effects = []
+        
+        # EQ Section (applied first)
+        if low_shelf_gain != 0.0:
+            board_effects.append(LowShelfFilter(cutoff_frequency_hz=low_shelf_freq, gain_db=low_shelf_gain, q=0.707))
+        
+        if mid1_gain != 0.0:
+            board_effects.append(PeakFilter(cutoff_frequency_hz=mid1_freq, gain_db=mid1_gain, q=mid1_q))
+        
+        if mid2_gain != 0.0:
+            board_effects.append(PeakFilter(cutoff_frequency_hz=mid2_freq, gain_db=mid2_gain, q=mid2_q))
+        
+        if high_shelf_gain != 0.0:
+            board_effects.append(HighShelfFilter(cutoff_frequency_hz=high_shelf_freq, gain_db=high_shelf_gain, q=0.707))
+        
+        # Compressor (dynamics control)
+        if compressor_threshold < 0.0:
+            board_effects.append(Compressor(
+                threshold_db=compressor_threshold,
+                ratio=compressor_ratio,
+                attack_ms=compressor_attack,
+                release_ms=compressor_release
+            ))
+        
+        # Distortion (saturation/overdrive)
+        if distortion_drive > 1.0:
+            board_effects.append(Distortion(drive_db=20.0 * np.log10(distortion_drive)))
+        
+        # Chorus (stereo widening/modulation)
+        if chorus_mix > 0.0:
+            board_effects.append(Chorus(rate_hz=chorus_rate, depth=chorus_depth, mix=chorus_mix))
+        
+        # Delay (echo)
+        if delay_mix > 0.0 and delay_seconds > 0.0:
+            board_effects.append(Delay(delay_seconds=delay_seconds, feedback=delay_feedback, mix=delay_mix))
+        
+        # Reverb (space/ambience)
+        if reverb_wet_level > 0.0:
+            board_effects.append(Reverb(
+                room_size=reverb_room_size,
+                damping=reverb_damping,
+                wet_level=reverb_wet_level,
+                dry_level=1.0 - reverb_wet_level
+            ))
+        
+        # Gain (volume adjustment)
+        if gain_db != 0.0:
+            board_effects.append(Gain(gain_db=gain_db))
+        
+        # Limiter (final stage to prevent clipping)
+        board_effects.append(Limiter(threshold_db=limiter_threshold, release_ms=limiter_release))
+        
+        # Create and apply the effects chain
+        board = Pedalboard(board_effects)
         return board(audio, self.sample_rate)
