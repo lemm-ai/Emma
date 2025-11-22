@@ -168,6 +168,14 @@ class ACEStepModel(BaseModel):
             elif audio.shape[0] == 1:
                 audio = np.repeat(audio, 2, axis=0)
             
+            # Trim last 2.5 seconds when using MusicGen fallback (removes artifacts)
+            if self.use_fallback:
+                trim_duration = 2.5  # seconds
+                trim_samples = int(trim_duration * target_sample_rate)
+                if audio.shape[1] > trim_samples:
+                    audio = audio[:, :-trim_samples]
+                    logger.info(f"Trimmed {trim_duration}s MusicGen artifacts from end")
+            
             logger.info(f"Final audio shape: {audio.shape}, duration: {audio.shape[1]/target_sample_rate:.2f}s")
             return audio
             

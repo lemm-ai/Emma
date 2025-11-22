@@ -75,7 +75,8 @@ class EmmaUI:
         prompt: str,
         lyrics: str,
         timeline_position: str,
-        auto_lyrics: bool
+        auto_lyrics: bool,
+        duration: int = 30
     ):
         """Generate music clip"""
         try:
@@ -125,6 +126,7 @@ class EmmaUI:
                 prompt=prompt,
                 lyrics=lyrics if lyrics else None,
                 auto_generate_lyrics=auto_lyrics and not lyrics,
+                duration=duration,
                 separate_stems=separate_stems,
                 reference_audio=reference_audio  # Pass for MusicControlNet/style consistency
             )
@@ -351,12 +353,38 @@ class EmmaUI:
             total_duration = timeline_data.get('total_duration', 0)
             clips = timeline_data.get('clips', [])
             
-            # Generate timeline ruler
-            ruler_html = '<div style="display: flex; margin-bottom: 5px; padding: 0 10px; font-size: 11px; color: #888;">'
+            # Generate timeline ruler with better contrast
+            ruler_html = '<div style="display: flex; margin-bottom: 8px; padding: 0 10px; font-size: 11px; color: #333; font-weight: 500; background: #e8e8e8; border-radius: 4px; padding: 4px 10px;">'
             num_markers = min(int(total_duration) + 1, 20)
             for i in range(num_markers):
                 ruler_html += f'<div style="flex: 1; text-align: center;">{i}s</div>'
             ruler_html += '</div>'
+            
+            # Playback controls
+            controls_html = '''
+            <div style="display: flex; gap: 8px; margin-bottom: 10px; padding: 8px; background: #f0f0f0; border-radius: 8px;">
+                <button onclick="playTimeline()" style="flex: 1; padding: 8px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; transition: transform 0.2s;"
+                        onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    ▶ Play
+                </button>
+                <button onclick="pauseTimeline()" style="flex: 1; padding: 8px 16px; background: #6c757d; 
+                        border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; transition: transform 0.2s;"
+                        onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    ⏸ Pause
+                </button>
+                <button onclick="stopTimeline()" style="flex: 1; padding: 8px 16px; background: #dc3545; 
+                        border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; transition: transform 0.2s;"
+                        onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    ⏹ Stop
+                </button>
+            </div>
+            <script>
+                function playTimeline() { alert('Timeline playback not yet implemented - export and use audio player'); }
+                function pauseTimeline() { alert('Timeline playback not yet implemented - export and use audio player'); }
+                function stopTimeline() { alert('Timeline playback not yet implemented - export and use audio player'); }
+            </script>
+            '''
             
             # Generate clip bubbles
             clips_html = '<div style="position: relative; height: 80px; background: #f5f5f5; border-radius: 8px; padding: 10px; margin-top: 5px;">'
@@ -391,13 +419,14 @@ class EmmaUI:
             
             clips_html += '</div>'
             
-            # Combine ruler and clips
+            # Combine ruler, controls, and clips
             timeline_html = f'''
             <div style="background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 12px rgba(0,0,0,0.1);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <h4 style="margin: 0; color: #333;">🎼 Timeline</h4>
                     <span style="color: #666; font-size: 13px;">Total: {total_duration:.1f}s | {len(clips)} clips</span>
                 </div>
+                {controls_html}
                 {ruler_html}
                 {clips_html}
             </div>
@@ -452,33 +481,80 @@ class EmmaUI:
                     <div style="font-size: 11px; color: rgba(255,255,255,0.9); margin-bottom: 8px; line-height: 1.3;">
                         {prompt_preview}
                     </div>
+                    
+                    <!-- Mini playback controls -->
+                    <div style="display: flex; gap: 4px; margin-bottom: 8px; padding: 6px; background: rgba(0,0,0,0.15); border-radius: 6px;">
+                        <button onclick="playClip('{clip_id}')" 
+                                style="flex: 1; padding: 4px; background: rgba(255,255,255,0.2); border: none; border-radius: 4px; 
+                                color: white; font-size: 16px; cursor: pointer; transition: background 0.2s;"
+                                onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                                onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                            ▶
+                        </button>
+                        <button onclick="pauseClip('{clip_id}')" 
+                                style="flex: 1; padding: 4px; background: rgba(255,255,255,0.2); border: none; border-radius: 4px; 
+                                color: white; font-size: 16px; cursor: pointer; transition: background 0.2s;"
+                                onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                                onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                            ⏸
+                        </button>
+                        <button onclick="stopClip('{clip_id}')" 
+                                style="flex: 1; padding: 4px; background: rgba(255,255,255,0.2); border: none; border-radius: 4px; 
+                                color: white; font-size: 16px; cursor: pointer; transition: background 0.2s;"
+                                onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                                onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                            ⏹
+                        </button>
+                    </div>
+                    
+                    <!-- Icon action buttons -->
                     <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                        <button onclick="handleClipAction('{clip_id}', 'rename')" 
-                                style="flex: 1; min-width: 60px; padding: 6px 10px; background: rgba(255,255,255,0.25); 
-                                border: none; border-radius: 6px; color: white; font-size: 11px; cursor: pointer; 
+                        <button onclick="handleClipAction('{clip_id}', 'rename')" title="Rename"
+                                style="flex: 1; min-width: 40px; padding: 8px; background: rgba(255,255,255,0.25); 
+                                border: none; border-radius: 6px; color: white; font-size: 16px; cursor: pointer; 
                                 transition: background 0.2s;"
                                 onmouseover="this.style.background='rgba(255,255,255,0.35)'"
                                 onmouseout="this.style.background='rgba(255,255,255,0.25)'">
-                            ✏️ Rename
+                            ✏️
                         </button>
-                        <button onclick="handleClipAction('{clip_id}', 'download')" 
-                                style="flex: 1; min-width: 60px; padding: 6px 10px; background: rgba(255,255,255,0.25); 
-                                border: none; border-radius: 6px; color: white; font-size: 11px; cursor: pointer;
+                        <button onclick="handleClipAction('{clip_id}', 'extend')" title="Extend Clip"
+                                style="flex: 1; min-width: 40px; padding: 8px; background: rgba(255,255,255,0.25); 
+                                border: none; border-radius: 6px; color: white; font-size: 16px; cursor: pointer; 
                                 transition: background 0.2s;"
                                 onmouseover="this.style.background='rgba(255,255,255,0.35)'"
                                 onmouseout="this.style.background='rgba(255,255,255,0.25)'">
-                            📥 Download
+                            🔄
                         </button>
-                        <button onclick="handleClipAction('{clip_id}', 'delete')" 
-                                style="flex: 1; min-width: 60px; padding: 6px 10px; background: rgba(255,0,0,0.3); 
-                                border: none; border-radius: 6px; color: white; font-size: 11px; cursor: pointer;
+                        <button onclick="handleClipAction('{clip_id}', 'download')" title="Download"
+                                style="flex: 1; min-width: 40px; padding: 8px; background: rgba(255,255,255,0.25); 
+                                border: none; border-radius: 6px; color: white; font-size: 16px; cursor: pointer;
+                                transition: background 0.2s;"
+                                onmouseover="this.style.background='rgba(255,255,255,0.35)'"
+                                onmouseout="this.style.background='rgba(255,255,255,0.25)'">
+                            📥
+                        </button>
+                        <button onclick="handleClipAction('{clip_id}', 'delete')" title="Delete"
+                                style="flex: 1; min-width: 40px; padding: 8px; background: rgba(255,0,0,0.3); 
+                                border: none; border-radius: 6px; color: white; font-size: 16px; cursor: pointer;
                                 transition: background 0.2s;"
                                 onmouseover="this.style.background='rgba(255,0,0,0.45)'"
                                 onmouseout="this.style.background='rgba(255,0,0,0.3)'">
-                            🗑️ Delete
+                            🗑️
                         </button>
                     </div>
                 </div>
+                <script>
+                    function playClip(id) {{ alert('Clip playback not yet implemented. Use Download to get audio file.'); }}
+                    function pauseClip(id) {{ alert('Clip playback not yet implemented'); }}
+                    function stopClip(id) {{ alert('Clip playback not yet implemented'); }}
+                    function handleClipAction(id, action) {{ 
+                        if (action === 'extend') {{
+                            alert('Extend: Clear timeline and place clip at start for extension (not yet implemented)');
+                        }} else {{
+                            alert(action.charAt(0).toUpperCase() + action.slice(1) + ' action not yet implemented'); 
+                        }}
+                    }}
+                </script>
                 '''
             
             clips_html += '</div>'
@@ -668,7 +744,7 @@ class EmmaUI:
                         with gr.Row():
                             auto_lyrics_check = gr.Checkbox(
                                 label="Auto-generate Lyrics",
-                                value=True
+                                value=False  # Disabled by default - MusicGen can't do vocals
                             )
                             gen_lyrics_btn = gr.Button("Generate Lyrics Only", size="sm")
                         
@@ -683,6 +759,14 @@ class EmmaUI:
                                 choices=["Intro", "Previous", "Next", "Outro"],
                                 value="Next",
                                 label="Timeline Position"
+                            )
+                            duration_slider = gr.Slider(
+                                minimum=5,
+                                maximum=300,
+                                value=30,
+                                step=5,
+                                label="Duration (seconds)",
+                                info="Generate clips from 5 seconds to 5 minutes"
                             )
                         
                         with gr.Row():
@@ -804,7 +888,7 @@ class EmmaUI:
             # Update generate button to refresh timeline and library displays
             generate_btn.click(
                 fn=gpu_generate_music,
-                inputs=[prompt_input, lyrics_input, timeline_position, auto_lyrics_check],
+                inputs=[prompt_input, lyrics_input, timeline_position, auto_lyrics_check, duration_slider],
                 outputs=[audio_output, status_text, enhance_audio_input, timeline_display, library_display, upload_status]
             )
             
