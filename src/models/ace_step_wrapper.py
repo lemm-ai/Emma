@@ -132,16 +132,32 @@ class ACEStepModel(BaseModel):
                     **kwargs
                 )
             
-            # Convert to numpy and reshape
-            audio = audio_values[0].cpu().numpy()
+            logger.info(f"Generated audio shape: {audio_values.shape}")
             
-            # Ensure stereo output
+            # MusicGen returns audio at 32kHz, need to convert to target sample rate
+            # audio_values shape: (batch, channels, samples)
+            audio = audio_values[0].cpu().numpy()  # Shape: (channels, samples)
+            
+            # Convert from 32kHz to target sample rate (48kHz)
+            model_sample_rate = 32000
+            target_sample_rate = 48000
+            
+            if model_sample_rate != target_sample_rate:
+                import scipy.signal
+                # Resample each channel
+                num_samples_target = int(audio.shape[1] * target_sample_rate / model_sample_rate)
+                audio_resampled = np.zeros((audio.shape[0], num_samples_target))
+                for i in range(audio.shape[0]):
+                    audio_resampled[i] = scipy.signal.resample(audio[i], num_samples_target)
+                audio = audio_resampled
+            
+            # Ensure stereo output (channels, samples)
             if audio.ndim == 1:
                 audio = np.stack([audio, audio])  # Mono to stereo
             elif audio.shape[0] == 1:
                 audio = np.repeat(audio, 2, axis=0)
             
-            logger.info("Music generation complete")
+            logger.info(f"Final audio shape: {audio.shape}, duration: {audio.shape[1]/target_sample_rate:.2f}s")
             return audio
             
         except Exception as e:

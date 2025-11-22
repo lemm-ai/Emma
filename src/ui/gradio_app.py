@@ -83,12 +83,18 @@ class EmmaUI:
                 return None, "Please enter a prompt first."
             
             # Generate music
+            # Note: Disable stem separation on HF Spaces to avoid errors
+            import os
+            separate_stems = not os.getenv('SPACE_ID')
+            
             result = self.music_gen.generate_music(
                 prompt=prompt,
                 lyrics=lyrics if lyrics else None,
                 auto_generate_lyrics=auto_lyrics and not lyrics,
-                separate_stems=True
+                separate_stems=separate_stems
             )
+            
+            logger.info(f"Generated result - audio shape: {result['audio'].shape}, duration: {result['duration']}")
             
             self.current_clip = result['audio']
             self.current_stems = result['stems']

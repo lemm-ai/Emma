@@ -142,17 +142,24 @@ class MusicGenerator:
                 logger.info("Separating audio into stems...")
                 stems = self.stem_sep.infer(audio)
             
+            # Calculate actual duration from audio shape
+            # Audio shape is (channels, samples) from MusicGen
+            if audio.ndim == 2:
+                actual_duration = audio.shape[1] / settings.audio.sample_rate
+            else:
+                actual_duration = audio.shape[0] / settings.audio.sample_rate
+            
             result = {
                 'audio': audio,
                 'segments': segments,
                 'stems': stems,
                 'lyrics': lyrics,
                 'prompt': prompt,
-                'duration': duration,
+                'duration': actual_duration,
                 'sample_rate': settings.audio.sample_rate
             }
             
-            logger.info("Music generation complete")
+            logger.info(f"Music generation complete - duration: {actual_duration:.2f}s")
             return result
             
         except Exception as e:
