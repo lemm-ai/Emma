@@ -108,7 +108,9 @@ class EmmaUI:
                 # If mono, expand to stereo
                 audio_for_gradio = np.stack([audio_for_gradio, audio_for_gradio], axis=1)
             
-            # Add to timeline
+            logger.info(f"Audio for Gradio shape: {audio_for_gradio.shape}")
+            
+            # Add to timeline (use original audio in channels, samples format)
             from ..timeline.manager import ClipPosition
             position_map: dict[str, ClipPosition] = {
                 "Intro": "intro",
@@ -117,6 +119,7 @@ class EmmaUI:
                 "Outro": "outro"
             }
             
+            logger.info(f"Adding clip to timeline - audio shape: {result['audio'].shape}")
             clip_id = self.timeline.add_clip(
                 audio=result['audio'],
                 position=position_map.get(timeline_position, "next"),
