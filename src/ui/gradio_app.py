@@ -63,7 +63,7 @@ class EmmaUI:
         lyrics: str,
         timeline_position: str,
         auto_lyrics: bool
-    ) -> Tuple[Optional[Tuple[int, np.ndarray]], str]:
+    ):
         """Generate music clip"""
         try:
             if not prompt:
@@ -132,9 +132,9 @@ class EmmaUI:
     
     def apply_mastering(
         self,
-        audio_input: Tuple[int, np.ndarray],
+        audio_input,
         preset: str
-    ) -> Tuple[Optional[Tuple[int, np.ndarray]], str]:
+    ):
         """Apply mastering preset"""
         try:
             if audio_input is None:
@@ -304,7 +304,12 @@ class EmmaUI:
     
     def launch(self, share: bool = False, server_port: int = 7860):
         """Launch the Gradio app"""
+        import os
         app = self.create_interface()
+        
+        # Auto-enable share for HuggingFace Spaces
+        if os.getenv('SPACE_ID'):
+            share = True
         
         logger.info(f"Launching EMMA UI on port {server_port}...")
         app.launch(
