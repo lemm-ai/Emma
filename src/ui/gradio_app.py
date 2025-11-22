@@ -159,16 +159,16 @@ class EmmaUI:
             
             # Get updated info displays
             clips_info = self.get_clip_library_info()
-            timeline_info = self.get_timeline_info()
-            timeline_clips = self.get_timeline_clips_dataframe()
+            timeline_html = self.get_timeline_html()
+            library_html = self.get_clip_library_html()
             
             return (
                 (settings.audio.sample_rate, audio_for_gradio),  # audio_output
                 f"Music generated successfully! Clip ID: {clip_id}",  # status_text
                 (settings.audio.sample_rate, audio_for_gradio),  # enhance_audio_input
-                timeline_info,  # timeline_info
-                clips_info,  # clips_dataframe
-                timeline_clips  # timeline_clips_df
+                timeline_html,  # timeline_display
+                library_html,  # library_display
+                ""  # upload_status (clear it)
             )
             
         except Exception as e:
@@ -177,9 +177,9 @@ class EmmaUI:
                 None, 
                 f"Error: {str(e)}", 
                 None, 
-                self.get_timeline_info(), 
-                self.get_clip_library_info(),
-                self.get_timeline_clips_dataframe()
+                self.get_timeline_html(), 
+                self.get_clip_library_html(),
+                ""
             )
     
     def apply_mastering(
@@ -301,7 +301,164 @@ class EmmaUI:
             logger.error(f"Error getting clip library info: {e}")
             return []
     
-    def get_timeline_info(self) -> str:
+    def get_timeline_html(self):
+        """Generate HTML for visual timeline with bubble-style clips"""
+        try:
+            timeline_data = self.timeline.get_info()
+            if not timeline_data or not timeline_data.get('clips'):
+                return """
+                <div style="padding: 40px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; color: white;">
+                    <h3>🎵 Timeline Empty</h3>
+                    <p>Generate music and it will appear here automatically!</p>
+                </div>
+                """
+            
+            total_duration = timeline_data.get('total_duration', 0)
+            clips = timeline_data.get('clips', [])
+            
+            # Generate timeline ruler
+            ruler_html = '<div style="display: flex; margin-bottom: 5px; padding: 0 10px; font-size: 11px; color: #888;">'
+            num_markers = min(int(total_duration) + 1, 20)
+            for i in range(num_markers):
+                ruler_html += f'<div style="flex: 1; text-align: center;">{i}s</div>'
+            ruler_html += '</div>'
+            
+            # Generate clip bubbles
+            clips_html = '<div style="position: relative; height: 80px; background: #f5f5f5; border-radius: 8px; padding: 10px; margin-top: 5px;">'
+            
+            for clip in clips:
+                clip_id = clip.get('id', 'Unknown')[:8]
+                start_time = clip.get('start_time', 0)
+                duration = clip.get('duration', 0)
+                
+                # Calculate position and width as percentage
+                left_percent = (start_time / total_duration * 100) if total_duration > 0 else 0
+                width_percent = (duration / total_duration * 100) if total_duration > 0 else 10
+                
+                # Generate random color based on clip_id
+                hue = hash(clip.get('id', '')) % 360
+                color = f"hsl({hue}, 70%, 60%)"
+                
+                clips_html += f'''
+                <div style="position: absolute; left: {left_percent}%; width: {width_percent}%; height: 60px; 
+                     background: {color}; border-radius: 12px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                     overflow: hidden; cursor: pointer; transition: transform 0.2s;" 
+                     onmouseover="this.style.transform='scale(1.05)'" 
+                     onmouseout="this.style.transform='scale(1)'">
+                    <div style="font-weight: bold; font-size: 12px; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">
+                        {clip_id}...
+                    </div>
+                    <div style="font-size: 10px; color: rgba(255,255,255,0.9);">
+                        {duration:.1f}s
+                    </div>
+                </div>
+                '''
+            
+            clips_html += '</div>'
+            
+            # Combine ruler and clips
+            timeline_html = f'''
+            <div style="background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 12px rgba(0,0,0,0.1);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h4 style="margin: 0; color: #333;">🎼 Timeline</h4>
+                    <span style="color: #666; font-size: 13px;">Total: {total_duration:.1f}s | {len(clips)} clips</span>
+                </div>
+                {ruler_html}
+                {clips_html}
+            </div>
+            '''
+            
+            return timeline_html
+            
+        except Exception as e:
+            logger.error(f"Error generating timeline HTML: {e}")
+            return f'<div style="padding: 20px; color: red;">Error loading timeline: {str(e)}</div>'
+    
+    def get_clip_library_html(self):
+        """Generate HTML for clip library sidebar with bubble-style clips"""
+        try:
+            clips = self.clip_library.search_clips("")
+            if not clips:
+                return """
+                <div style="padding: 20px; text-align: center; color: #888;">
+                    <p>📚 No clips yet</p>
+                    <p style="font-size: 12px;">Generate or upload clips to see them here</p>
+                </div>
+                """
+            
+            clips_html = '<div style="display: flex; flex-direction: column; gap: 12px; padding: 10px;">'
+            
+            for clip in clips:
+                clip_id = clip.clip_id
+                short_id = clip_id[:8]
+                name = clip.name or "Untitled"
+                duration = clip.duration
+                prompt_preview = (clip.prompt[:40] + "...") if len(clip.prompt) > 40 else clip.prompt
+                
+                # Color based on clip_id
+                hue = hash(clip_id) % 360
+                color = f"hsl({hue}, 65%, 55%)"
+                
+                clips_html += f'''
+                <div style="background: {color}; border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); 
+                     transition: transform 0.2s, box-shadow 0.2s;" 
+                     onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.25)'"
+                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.15)'">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                        <div style="flex: 1;">
+                            <div style="font-weight: bold; color: white; font-size: 13px; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">
+                                {name}
+                            </div>
+                            <div style="font-size: 11px; color: rgba(255,255,255,0.85); margin-top: 2px;">
+                                {short_id}... • {duration:.1f}s
+                            </div>
+                        </div>
+                    </div>
+                    <div style="font-size: 11px; color: rgba(255,255,255,0.9); margin-bottom: 8px; line-height: 1.3;">
+                        {prompt_preview}
+                    </div>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                        <button onclick="handleClipAction('{clip_id}', 'rename')" 
+                                style="flex: 1; min-width: 60px; padding: 6px 10px; background: rgba(255,255,255,0.25); 
+                                border: none; border-radius: 6px; color: white; font-size: 11px; cursor: pointer; 
+                                transition: background 0.2s;"
+                                onmouseover="this.style.background='rgba(255,255,255,0.35)'"
+                                onmouseout="this.style.background='rgba(255,255,255,0.25)'">
+                            ✏️ Rename
+                        </button>
+                        <button onclick="handleClipAction('{clip_id}', 'download')" 
+                                style="flex: 1; min-width: 60px; padding: 6px 10px; background: rgba(255,255,255,0.25); 
+                                border: none; border-radius: 6px; color: white; font-size: 11px; cursor: pointer;
+                                transition: background 0.2s;"
+                                onmouseover="this.style.background='rgba(255,255,255,0.35)'"
+                                onmouseout="this.style.background='rgba(255,255,255,0.25)'">
+                            📥 Download
+                        </button>
+                        <button onclick="handleClipAction('{clip_id}', 'delete')" 
+                                style="flex: 1; min-width: 60px; padding: 6px 10px; background: rgba(255,0,0,0.3); 
+                                border: none; border-radius: 6px; color: white; font-size: 11px; cursor: pointer;
+                                transition: background 0.2s;"
+                                onmouseover="this.style.background='rgba(255,0,0,0.45)'"
+                                onmouseout="this.style.background='rgba(255,0,0,0.3)'">
+                            🗑️ Delete
+                        </button>
+                    </div>
+                </div>
+                '''
+            
+            clips_html += '</div>'
+            
+            header_html = '''
+            <div style="padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                 border-radius: 12px 12px 0 0; color: white;">
+                <h3 style="margin: 0; font-size: 16px;">📚 Clip Library</h3>
+                <p style="margin: 5px 0 0 0; font-size: 12px; opacity: 0.9;">''' + f"{len(clips)} clips</p></div>"
+            
+            return header_html + clips_html
+            
+        except Exception as e:
+            logger.error(f"Error generating clip library HTML: {e}")
+            return f'<div style="padding: 20px; color: red;">Error: {str(e)}</div>'
         """Get formatted timeline information"""
         try:
             timeline_data = self.timeline.get_info()
@@ -347,7 +504,7 @@ class EmmaUI:
         """Upload audio file and add to timeline"""
         try:
             if audio_file is None:
-                return self.get_timeline_info(), self.get_timeline_clips_dataframe(), "No file uploaded"
+                return self.get_timeline_html(), self.get_clip_library_html(), "No file uploaded"
             
             # Load audio file
             import soundfile as sf
@@ -405,16 +562,16 @@ class EmmaUI:
             self.clip_library.add_clip(metadata)
             
             return (
-                self.get_timeline_info(),
-                self.get_timeline_clips_dataframe(),
+                self.get_timeline_html(),
+                self.get_clip_library_html(),
                 f"Successfully added '{filename}' to timeline and library!"
             )
             
         except Exception as e:
             logger.error(f"Error uploading to timeline: {e}")
             return (
-                self.get_timeline_info(),
-                self.get_timeline_clips_dataframe(),
+                self.get_timeline_html(),
+                self.get_clip_library_html(),
                 f"Error: {str(e)}"
             )
     
@@ -434,19 +591,39 @@ class EmmaUI:
             > For best results, run EMMA locally with proper model weights.
             """
         
-        with gr.Blocks(title="EMMA - Experimental Music Making Algorithm") as app:
-            gr.Markdown(f"""
-            # 🎵 EMMA - Experimental Music Making Algorithm
-            
-            AI-powered music generation and enhancement platform
-            
-            **Created by Gamahea / LEMM Project** | Making AI music free and open source for all
-            {fallback_warning}
-            """)
-            
-            with gr.Tab("🎼 Generate Music"):
-                with gr.Row():
-                    with gr.Column(scale=2):
+        with gr.Blocks(title="EMMA - Experimental Music Making Algorithm", css="""
+            .clip-library-sidebar {
+                position: fixed !important;
+                right: 0;
+                top: 0;
+                height: 100vh;
+                width: 320px;
+                overflow-y: auto;
+                background: #fafafa;
+                border-left: 1px solid #e0e0e0;
+                z-index: 1000;
+            }
+            .main-content {
+                margin-right: 340px;
+            }
+        """) as app:
+            # Main layout with sidebar
+            with gr.Row():
+                # Main content area
+                with gr.Column(scale=4, elem_classes="main-content"):
+                    gr.Markdown(f"""
+                    # 🎵 EMMA - Experimental Music Making Algorithm
+                    
+                    AI-powered music generation and enhancement platform
+                    
+                    **Created by Gamahea / LEMM Project** | Making AI music free and open source for all
+                    {fallback_warning}
+                    """)
+                    
+                    # Visual Timeline (persistent across tabs)
+                    timeline_display = gr.HTML(value=self.get_timeline_html(), label="Timeline")
+                    
+                    with gr.Tab("🎼 Generate Music"):
                         prompt_input = gr.Textbox(
                             label="Music Prompt",
                             placeholder="Describe the music you want to create (e.g., 'upbeat pop song with catchy melody')",
@@ -473,16 +650,15 @@ class EmmaUI:
                                 label="Timeline Position"
                             )
                         
-                        generate_btn = gr.Button("🎵 Generate Music", variant="primary", size="lg")
+                        with gr.Row():
+                            generate_btn = gr.Button("🎵 Generate Music", variant="primary", size="lg", scale=3)
+                            upload_audio = gr.Audio(label="Or Upload Audio", type="filepath", scale=2)
+                        
+                        with gr.Row():
+                            audio_output = gr.Audio(label="Generated Music")
+                            status_text = gr.Textbox(label="Status", interactive=False)
                     
-                    with gr.Column(scale=1):
-                        gr.Markdown("### Output")
-                        audio_output = gr.Audio(label="Generated Music")
-                        status_text = gr.Textbox(label="Status", interactive=False)
-            
-            with gr.Tab("🎚️ Audio Enhancement"):
-                with gr.Row():
-                    with gr.Column():
+                    with gr.Tab("🎚️ Audio Enhancement"):
                         enhance_audio_input = gr.Audio(label="Audio Input")
                         
                         gr.Markdown("### Quick Mastering Presets")
@@ -548,66 +724,40 @@ class EmmaUI:
                         
                         apply_custom_fx_btn = gr.Button("Apply Custom EQ & Effects", variant="secondary")
                         
-                    with gr.Column():
                         enhanced_output = gr.Audio(label="Enhanced Audio")
                         enhance_status = gr.Textbox(label="Status", interactive=False)
-            
-            with gr.Tab("📚 Clip Library"):
-                gr.Markdown("### Your Generated Clips")
-                gr.Markdown("*Click a row to select, then use 'Load to Timeline' button*")
-                
-                with gr.Row():
-                    search_box = gr.Textbox(label="Search clips", placeholder="Search by name or prompt...")
-                    search_btn = gr.Button("Search")
-                
-                clips_dataframe = gr.Dataframe(
-                    headers=["ID", "Name", "Prompt", "Duration", "Created"],
-                    datatype=["str", "str", "str", "str", "str"],
-                    label="Clips",
-                    interactive=False,
-                    wrap=True
-                )
-                
-                with gr.Row():
-                    load_clip_btn = gr.Button("Load to Timeline", variant="primary")
-                    delete_clip_btn = gr.Button("Delete", variant="stop")
                     
-                load_status = gr.Textbox(label="Status", interactive=False, visible=False)
-            
-            with gr.Tab("⏱️ Timeline"):
-                gr.Markdown("### DAW Timeline - Arrange Your Clips")
+                    with gr.Tab("ℹ️ About"):
+                        gr.Markdown("""
+                        ## About EMMA
+                        
+                        EMMA (Experimental Music Making Algorithm) is an AI-powered music generation and enhancement platform.
+                        
+                        ### Features:
+                        - **AI Lyrics Generation** - Generate lyrics from text prompts
+                        - **Music Generation** - Create clips with AI
+                        - **Stem Separation** - Separate vocals, drums, bass, and other instruments
+                        - **Audio Enhancement** - Professional mastering presets + custom EQ/effects
+                        - **Visual Timeline** - Arrange clips like a DAW
+                        - **Clip Library** - Organize and manage your creations (see sidebar →)
+                        
+                        ### Technology Stack:
+                        - ACE-Step / MusicGen for music generation
+                        - LyricsMindAI / GPT-2 for lyrics generation
+                        - Demucs for stem separation
+                        - Pedalboard for audio processing
+                        - Gradio for the user interface
+                        
+                        ### License
+                        Apache 2.0 (or GPL 3.0 where required by dependencies)
+                        
+                        **Open Source | Free for All | Created by Gamahea / LEMM Project**
+                        """)
                 
-                with gr.Row():
-                    with gr.Column(scale=3):
-                        # Timeline visualization (using DataFrame for now, can be enhanced with custom HTML/JS)
-                        timeline_clips_df = gr.Dataframe(
-                            headers=["Track", "Clip Name", "Start (s)", "Duration (s)", "End (s)"],
-                            datatype=["str", "str", "number", "number", "number"],
-                            label="Timeline Clips",
-                            interactive=False,
-                            wrap=True,
-                            row_count=10
-                        )
-                        
-                        timeline_info = gr.Textbox(label="Timeline Info", lines=5, interactive=False)
-                        
-                    with gr.Column(scale=1):
-                        gr.Markdown("### Controls")
-                        
-                        # Upload audio to add to timeline
-                        upload_audio = gr.Audio(label="Upload Audio File", type="filepath")
-                        upload_to_timeline_btn = gr.Button("➕ Add Upload to Timeline", variant="secondary")
-                        
-                        refresh_timeline_btn = gr.Button("🔄 Refresh Timeline")
-                        clear_timeline_btn = gr.Button("🗑️ Clear Timeline", variant="stop")
-                        
-                        gr.Markdown("---")
-                        
-                        export_timeline_btn = gr.Button("📥 Export Song", variant="primary", size="lg")
-                        export_output = gr.File(label="Download", interactive=False, file_count="single")
-                
-                timeline_audio = gr.Audio(label="Timeline Preview (Full Song)")
-                upload_status = gr.Textbox(label="Status", interactive=False, visible=False)
+                # Clip Library Sidebar (persistent across all tabs)
+                with gr.Column(scale=1, elem_classes="clip-library-sidebar"):
+                    library_display = gr.HTML(value=self.get_clip_library_html(), label="Clip Library")
+                    upload_status = gr.Textbox(label="Upload Status", interactive=False, lines=2)
             
             # Connect button callbacks after all components are defined
             gen_lyrics_btn.click(
@@ -616,10 +766,18 @@ class EmmaUI:
                 outputs=[lyrics_input]
             )
             
+            # Update generate button to refresh timeline and library displays
             generate_btn.click(
                 fn=gpu_generate_music,
                 inputs=[prompt_input, lyrics_input, timeline_position, auto_lyrics_check],
-                outputs=[audio_output, status_text, enhance_audio_input, timeline_info, clips_dataframe, timeline_clips_df]
+                outputs=[audio_output, status_text, enhance_audio_input, timeline_display, library_display, upload_status]
+            )
+            
+            # Upload audio updates timeline and library
+            upload_audio.change(
+                fn=self.upload_to_timeline,
+                inputs=[upload_audio],
+                outputs=[timeline_display, library_display, upload_status]
             )
             
             apply_mastering_btn.click(
@@ -644,12 +802,6 @@ class EmmaUI:
                     limiter_threshold, limiter_release
                 ],
                 outputs=[enhanced_output, enhance_status]
-            )
-            
-            upload_to_timeline_btn.click(
-                fn=self.upload_to_timeline,
-                inputs=[upload_audio],
-                outputs=[timeline_info, timeline_clips_df, upload_status]
             )
             
             with gr.Tab("ℹ️ About"):
