@@ -16,7 +16,7 @@ pedalboard>=0.7.0
 # diffusers>=0.20.0
 
 # Web UI
-gradio>=4.0.0
+gradio==4.44.1
 
 # Database
 pyyaml>=6.0

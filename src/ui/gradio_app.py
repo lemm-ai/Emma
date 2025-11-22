@@ -240,14 +240,17 @@ class EmmaUI:
             
             with gr.Tab("📚 Clip Library"):
                 gr.Markdown("### Your Generated Clips")
+                gr.Markdown("*Clip library features will be available once models are integrated*")
                 
                 with gr.Row():
                     search_box = gr.Textbox(label="Search clips", placeholder="Search by name or prompt...")
                     search_btn = gr.Button("Search")
                 
-                clips_gallery = gr.Dataframe(
-                    headers=["ID", "Name", "Prompt", "Duration", "Created"],
-                    label="Clips"
+                clips_info = gr.Textbox(
+                    label="Clips",
+                    lines=10,
+                    interactive=False,
+                    placeholder="No clips yet. Generate music to see clips here."
                 )
                 
                 with gr.Row():
