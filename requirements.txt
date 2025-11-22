@@ -1,0 +1,33 @@
+# Core dependencies
+torch>=2.0.0
+torchaudio>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Audio processing
+librosa>=0.10.0
+soundfile>=0.12.1
+pydub>=0.25.1
+pedalboard>=0.7.0
+
+# AI Models (placeholder - actual implementations needed)
+# demucs
+# transformers>=4.30.0
+# diffusers>=0.20.0
+
+# Web UI
+gradio>=4.0.0
+
+# Database
+pyyaml>=6.0
+
+# Utilities
+python-dotenv>=1.0.0
+requests>=2.31.0
+tqdm>=4.65.0
+pillow>=10.0.0
+
+# Optional: For development
+# pytest>=7.4.0
+# black>=23.0.0
+# flake8>=6.0.0

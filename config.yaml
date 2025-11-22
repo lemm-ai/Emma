@@ -1,0 +1,41 @@
+# EMMA Configuration File
+
+# Model settings
+model:
+  ace_step_model_path: "models/ace-step"
+  lyrics_mind_model_path: "models/lyricmind"
+  demucs_model: "htdemucs"
+  sovits_model_path: "models/sovits"
+  musiccontrolnet_model_path: "models/musiccontrolnet"
+  audiosr_model_path: "models/audiosr"
+  device: "cuda"  # cuda, rocm, or cpu
+  use_gpu: true
+
+# Audio settings
+audio:
+  sample_rate: 48000
+  clip_duration: 32
+  lead_in_duration: 2
+  lead_out_duration: 2
+  core_duration: 28
+  output_format: "wav"  # wav or mp3
+  num_stems: 4
+
+# Database settings
+database:
+  db_type: "sqlite"  # sqlite or firebase
+  sqlite_path: "data/emma_clips.db"
+  firebase_config: null
+
+# UI settings
+ui:
+  theme: "default"
+  share: false
+  server_name: "0.0.0.0"
+  server_port: 7860
+
+# Logging settings
+logging:
+  level: "INFO"
+  log_file: "logs/emma.log"
+  console: true
