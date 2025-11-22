@@ -187,26 +187,28 @@ class EmmaUI:
             logger.error(f"Error applying mastering: {e}")
             return None, f"Error: {str(e)}"
     
-    def get_clip_library_info(self) -> str:
-        """Get formatted clip library information"""
+    def get_clip_library_info(self):
+        """Get clip library information as DataFrame data"""
         try:
             clips = self.clip_library.search_clips("")  # Empty string returns all clips
             if not clips:
-                return "No clips yet. Generate music to see clips here."
+                return []
             
-            info_lines = []
+            # Return data as list of lists for DataFrame
+            data = []
             for clip in clips:
-                info_lines.append(f"ID: {clip.clip_id}")
-                info_lines.append(f"Name: {clip.name}")
-                info_lines.append(f"Prompt: {clip.prompt}")
-                info_lines.append(f"Duration: {clip.duration:.2f}s")
-                info_lines.append(f"Created: {clip.created_at}")
-                info_lines.append("---")
+                data.append([
+                    clip.clip_id[:8] + "...",  # Shortened ID
+                    clip.name,
+                    clip.prompt[:50] + "..." if len(clip.prompt) > 50 else clip.prompt,
+                    f"{clip.duration:.2f}s",
+                    clip.created_at.split("T")[0] if "T" in clip.created_at else clip.created_at[:10]
+                ])
             
-            return "\n".join(info_lines)
+            return data
         except Exception as e:
             logger.error(f"Error getting clip library info: {e}")
-            return f"Error loading clips: {str(e)}"
+            return []
     
     def get_timeline_info(self) -> str:
         """Get formatted timeline information"""
@@ -314,22 +316,25 @@ class EmmaUI:
             
             with gr.Tab("📚 Clip Library"):
                 gr.Markdown("### Your Generated Clips")
+                gr.Markdown("*Click a row to select, then use 'Load to Timeline' button*")
                 
                 with gr.Row():
                     search_box = gr.Textbox(label="Search clips", placeholder="Search by name or prompt...")
                     search_btn = gr.Button("Search")
                 
-                clips_info = gr.Textbox(
+                clips_dataframe = gr.Dataframe(
+                    headers=["ID", "Name", "Prompt", "Duration", "Created"],
+                    datatype=["str", "str", "str", "str", "str"],
                     label="Clips",
-                    lines=10,
                     interactive=False,
-                    placeholder="No clips yet. Generate music to see clips here."
+                    wrap=True
                 )
                 
                 with gr.Row():
-                    clip_id_input = gr.Textbox(label="Clip ID")
-                    load_clip_btn = gr.Button("Load to Timeline")
+                    load_clip_btn = gr.Button("Load to Timeline", variant="primary")
                     delete_clip_btn = gr.Button("Delete", variant="stop")
+                    
+                load_status = gr.Textbox(label="Status", interactive=False, visible=False)
             
             with gr.Tab("⏱️ Timeline"):
                 gr.Markdown("### Song Timeline")
@@ -355,7 +360,7 @@ class EmmaUI:
             generate_btn.click(
                 fn=gpu_generate_music,
                 inputs=[prompt_input, lyrics_input, timeline_position, auto_lyrics_check],
-                outputs=[audio_output, status_text, enhance_audio_input, timeline_info, clips_info]
+                outputs=[audio_output, status_text, enhance_audio_input, timeline_info, clips_dataframe]
             )
             
             apply_mastering_btn.click(

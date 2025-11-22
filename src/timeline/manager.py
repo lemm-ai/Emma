@@ -246,6 +246,11 @@ class TimelineManager:
     
     def _numpy_to_audiosegment(self, audio: np.ndarray) -> AudioSegment:
         """Convert numpy array to AudioSegment"""
+        # Ensure audio is in (samples, channels) format
+        if audio.ndim == 2 and audio.shape[0] < audio.shape[1]:
+            # If (channels, samples), transpose to (samples, channels)
+            audio = audio.T
+        
         # Ensure audio is in correct format
         if audio.dtype != np.int16:
             # Convert float to int16
