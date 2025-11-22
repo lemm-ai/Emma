@@ -93,6 +93,15 @@ class EmmaUI:
             self.current_clip = result['audio']
             self.current_stems = result['stems']
             
+            # Convert audio to correct format for Gradio (samples, channels)
+            audio_for_gradio = result['audio']
+            if audio_for_gradio.ndim == 2 and audio_for_gradio.shape[0] < audio_for_gradio.shape[1]:
+                # If (channels, samples), transpose to (samples, channels)
+                audio_for_gradio = audio_for_gradio.T
+            elif audio_for_gradio.ndim == 1:
+                # If mono, expand to stereo
+                audio_for_gradio = np.stack([audio_for_gradio, audio_for_gradio], axis=1)
+            
             # Add to timeline
             from ..timeline.manager import ClipPosition
             position_map: dict[str, ClipPosition] = {
@@ -137,7 +146,7 @@ class EmmaUI:
             
             self.clip_library.add_clip(metadata)
             
-            return (settings.audio.sample_rate, result['audio']), f"Music generated successfully! Clip ID: {clip_id}"
+            return (settings.audio.sample_rate, audio_for_gradio), f"Music generated successfully! Clip ID: {clip_id}"
             
         except Exception as e:
             logger.error(f"Error generating music: {e}")

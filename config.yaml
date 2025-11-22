@@ -11,7 +11,7 @@ model:
   sovits_model_path: "models/sovits"
   musiccontrolnet_model_path: "models/musiccontrolnet"
   audiosr_model_path: "models/audiosr"
-  device: "cuda"  # cuda, rocm, or cpu
+  device: "rocm"  # cuda, rocm, or cpu
   use_gpu: true
   
   # NOTE: On HuggingFace Spaces, fallback models are used automatically:

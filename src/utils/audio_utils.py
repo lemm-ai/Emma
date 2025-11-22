@@ -48,13 +48,18 @@ def save_audio(
     Save audio to file
     
     Args:
-        audio: Audio data as numpy array
+        audio: Audio data as numpy array (samples, channels) or (channels, samples)
         file_path: Output file path
         sample_rate: Sample rate
         format: Output format (wav or mp3)
     """
     try:
         Path(file_path).parent.mkdir(parents=True, exist_ok=True)
+        
+        # Ensure audio is in (samples, channels) format for soundfile
+        if audio.ndim == 2 and audio.shape[0] < audio.shape[1]:
+            # If (channels, samples), transpose to (samples, channels)
+            audio = audio.T
         
         if format.lower() == "mp3":
             # Convert to mp3 using pydub
