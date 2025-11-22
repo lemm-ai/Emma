@@ -17,6 +17,7 @@ pedalboard>=0.7.0
 
 # Web UI
 gradio==4.44.1
+spaces
 
 # Database
 pyyaml>=6.0

@@ -9,6 +9,19 @@ from typing import Optional, Tuple, List
 import numpy as np
 from datetime import datetime
 from pathlib import Path
+import os
+
+# Import spaces for HuggingFace ZeroGPU support
+try:
+    import spaces
+    HAS_SPACES = True
+except ImportError:
+    HAS_SPACES = False
+    # Create a no-op decorator for local development
+    class spaces:
+        @staticmethod
+        def GPU(func):
+            return func
 
 from ..music_generation.generator import MusicGenerator
 from ..audio_processing.enhancer import AudioEnhancer
@@ -205,7 +218,7 @@ class EmmaUI:
                 )
                 
                 generate_btn.click(
-                    fn=self.generate_music,
+                    fn=gpu_generate_music,
                     inputs=[prompt_input, lyrics_input, timeline_position, auto_lyrics_check],
                     outputs=[audio_output, status_text]
                 )
@@ -233,7 +246,7 @@ class EmmaUI:
                         enhance_status = gr.Textbox(label="Status", interactive=False)
                 
                 apply_mastering_btn.click(
-                    fn=self.apply_mastering,
+                    fn=gpu_apply_mastering,
                     inputs=[enhance_audio_input, mastering_preset],
                     outputs=[enhanced_output, enhance_status]
                 )
@@ -308,6 +321,11 @@ class EmmaUI:
     def launch(self, share: bool = False, server_port: int = 7860):
         """Launch the Gradio app"""
         import os
+        
+        # Set global instance for GPU-decorated functions
+        global _ui_instance
+        _ui_instance = self
+        
         app = self.create_interface()
         
         # Auto-enable share for HuggingFace Spaces
@@ -320,3 +338,34 @@ class EmmaUI:
             server_port=server_port,
             server_name="0.0.0.0"
         )
+
+
+# Global instance for GPU-decorated functions
+_ui_instance = None
+
+def _get_ui_instance():
+    """Get the global UI instance"""
+    global _ui_instance
+    if _ui_instance is None:
+        raise RuntimeError("UI not initialized")
+    return _ui_instance
+
+
+# GPU-decorated wrapper functions for HuggingFace Spaces ZeroGPU
+if HAS_SPACES:
+    @spaces.GPU
+    def gpu_generate_music(prompt, lyrics, timeline_position, auto_lyrics):
+        """GPU-accelerated music generation wrapper"""
+        return _get_ui_instance().generate_music(prompt, lyrics, timeline_position, auto_lyrics)
+    
+    @spaces.GPU
+    def gpu_apply_mastering(audio_input, preset):
+        """GPU-accelerated audio mastering wrapper"""
+        return _get_ui_instance().apply_mastering(audio_input, preset)
+else:
+    # No-op wrappers for local development
+    def gpu_generate_music(prompt, lyrics, timeline_position, auto_lyrics):
+        return _get_ui_instance().generate_music(prompt, lyrics, timeline_position, auto_lyrics)
+    
+    def gpu_apply_mastering(audio_input, preset):
+        return _get_ui_instance().apply_mastering(audio_input, preset)
