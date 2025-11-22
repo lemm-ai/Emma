@@ -84,6 +84,7 @@ class ACEStepModel(BaseModel):
         prompt: str,
         lyrics: Optional[str] = None,
         duration: int = 32,
+        reference_audio: Optional[np.ndarray] = None,
         **kwargs
     ) -> np.ndarray:
         """
@@ -93,6 +94,7 @@ class ACEStepModel(BaseModel):
             prompt: Text prompt for music generation
             lyrics: Optional lyrics text (will be combined with prompt)
             duration: Target duration in seconds
+            reference_audio: Optional reference audio for style consistency (channels, samples)
             **kwargs: Additional generation parameters
             
         Returns:
@@ -110,6 +112,15 @@ class ACEStepModel(BaseModel):
             full_prompt = prompt
             if lyrics:
                 full_prompt = f"{prompt}. Lyrics: {lyrics[:200]}"  # Limit lyrics length
+            
+            # Add reference audio context to prompt if provided
+            # Note: MusicGen doesn't natively support audio conditioning
+            # This is a placeholder for future MusicControlNet integration
+            if reference_audio is not None:
+                logger.info("Reference audio provided for style consistency")
+                # TODO: When MusicControlNet is available, use reference_audio here
+                # For now, just log and continue with text-only generation
+                full_prompt = f"[Consistent with previous style] {full_prompt}"
             
             # Process input
             inputs = self.processor(

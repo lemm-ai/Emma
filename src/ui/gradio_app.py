@@ -82,6 +82,40 @@ class EmmaUI:
             if not prompt:
                 return None, "Please enter a prompt first."
             
+            # Get reference audio from timeline for style consistency
+            reference_audio = None
+            timeline_data = self.timeline.get_info()
+            if timeline_data and timeline_data.get('clips') and len(timeline_data['clips']) > 0:
+                try:
+                    # Export current timeline as temporary reference for MusicControlNet
+                    logger.info("Exporting timeline as style reference for consistency...")
+                    import tempfile
+                    import os
+                    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
+                    temp_path = temp_file.name
+                    temp_file.close()
+                    
+                    self.timeline.export(temp_path)
+                    
+                    # Load the exported audio
+                    import soundfile as sf
+                    timeline_audio, sr = sf.read(temp_path)
+                    
+                    # Clean up temp file
+                    os.unlink(temp_path)
+                    
+                    # Convert to (channels, samples) format if needed
+                    if timeline_audio.ndim == 1:
+                        reference_audio = np.stack([timeline_audio, timeline_audio], axis=0)
+                    elif timeline_audio.shape[1] == 2:  # (samples, channels)
+                        reference_audio = timeline_audio.T
+                    else:
+                        reference_audio = timeline_audio
+                    
+                    logger.info(f"Using timeline as reference: shape {reference_audio.shape}")
+                except Exception as e:
+                    logger.warning(f"Could not export timeline as reference: {e}")
+            
             # Generate music
             # Note: Disable stem separation on HF Spaces to avoid errors
             import os
@@ -91,7 +125,8 @@ class EmmaUI:
                 prompt=prompt,
                 lyrics=lyrics if lyrics else None,
                 auto_generate_lyrics=auto_lyrics and not lyrics,
-                separate_stems=separate_stems
+                separate_stems=separate_stems,
+                reference_audio=reference_audio  # Pass for MusicControlNet/style consistency
             )
             
             logger.info(f"Generated result - audio shape: {result['audio'].shape}, duration: {result['duration']}")

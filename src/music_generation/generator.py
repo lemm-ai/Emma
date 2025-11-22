@@ -99,6 +99,7 @@ class MusicGenerator:
         auto_generate_lyrics: bool = True,
         duration: int = 32,
         separate_stems: bool = True,
+        reference_audio: Optional[np.ndarray] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """
@@ -110,6 +111,7 @@ class MusicGenerator:
             auto_generate_lyrics: Whether to auto-generate lyrics
             duration: Clip duration in seconds
             separate_stems: Whether to separate into stems
+            reference_audio: Optional reference audio for style consistency (channels, samples)
             **kwargs: Additional parameters
             
         Returns:
@@ -124,12 +126,13 @@ class MusicGenerator:
                 logger.info("Auto-generating lyrics from prompt...")
                 lyrics = self.generate_lyrics(prompt)
             
-            # Generate music
+            # Generate music with optional reference audio for consistency
             logger.info("Generating music...")
             audio = self.music_gen.infer(
                 prompt=prompt,
                 lyrics=lyrics,
                 duration=duration,
+                reference_audio=reference_audio,
                 **kwargs
             )
             
