@@ -258,7 +258,7 @@ class EmmaUI:
             with gr.Tab("⏱️ Timeline"):
                 gr.Markdown("### Song Timeline")
                 
-                timeline_info = gr.JSON(label="Timeline Info")
+                timeline_info = gr.Textbox(label="Timeline Info", lines=10, interactive=False)
                 
                 with gr.Row():
                     refresh_timeline_btn = gr.Button("Refresh Timeline")
