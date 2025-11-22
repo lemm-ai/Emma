@@ -20,25 +20,50 @@ class LyricsGenerator(BaseModel):
         super().__init__(model_path, device)
         
     def load(self) -> None:
-        """Load LyricsMindAI model"""
+        """Load lyrics generation model"""
         try:
-            logger.info("Loading Lyrics generation model...")
-            
-            from transformers import AutoTokenizer, AutoModelForCausalLM
+            import os
             import torch
+            from transformers import AutoTokenizer, AutoModelForCausalLM
             
-            # Use a pretrained model for lyrics generation
-            # We'll use GPT-2 fine-tuned on lyrics or a similar model
-            model_name = self.model_path or "gpt2"
+            # Check if running on HuggingFace Spaces
+            is_hf_space = os.getenv('SPACE_ID') is not None
             
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModelForCausalLM.from_pretrained(model_name)
-            self.model = self.model.to(self.device)
-            self.model.eval()
+            # Try to load LyricsMindAI first (local/preferred)
+            if not is_hf_space and self.model_path:
+                logger.info("Loading LyricsMindAI model...")
+                try:
+                    # TODO: Implement actual LyricsMindAI loading when available
+                    # from lyricmind import LyricGenerator
+                    # self.tokenizer = LyricGenerator.get_tokenizer()
+                    # self.model = LyricGenerator.from_pretrained(self.model_path)
+                    # self.model = self.model.to(self.device)
+                    # self.model.eval()
+                    # self.use_fallback = False
+                    
+                    # For now, raise to trigger fallback
+                    raise ImportError("LyricsMindAI not yet available")
+                    
+                except (ImportError, FileNotFoundError) as e:
+                    logger.warning(f"LyricsMindAI not available: {e}. Using fallback model.")
+                    is_hf_space = True  # Force fallback
             
-            # Set pad token if not set
-            if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.eos_token
+            # Fallback to GPT-2 on HuggingFace Spaces or when LyricsMindAI unavailable
+            if is_hf_space or not self.model_path:
+                logger.info("Loading GPT-2 fallback model for lyrics...")
+                model_name = "gpt2"
+                
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self.model = AutoModelForCausalLM.from_pretrained(model_name)
+                self.model = self.model.to(self.device)
+                self.model.eval()
+                self.use_fallback = True
+                
+                # Set pad token if not set
+                if self.tokenizer.pad_token is None:
+                    self.tokenizer.pad_token = self.tokenizer.eos_token
+                
+                logger.warning("Using GPT-2 as fallback. Note: Not optimized for song lyrics.")
             
             self.is_loaded = True
             logger.info("Lyrics generation model loaded successfully")

@@ -25,6 +25,11 @@ class ModelConfig:
     device: str = "cuda"  # cuda, rocm, or cpu
     use_gpu: bool = True
     
+    # Fallback model settings for HuggingFace Spaces compatibility
+    use_fallback_models: bool = False  # Auto-detected based on environment
+    fallback_music_model: str = "facebook/musicgen-large"  # Fallback when ACE-Step unavailable
+    fallback_lyrics_model: str = "gpt2"  # Fallback when LyricsMindAI unavailable
+    
 
 @dataclass
 class AudioConfig:

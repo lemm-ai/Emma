@@ -28,6 +28,7 @@ class BaseModel(ABC):
         self.tokenizer = None  # For models that need tokenizers
         self.processor = None  # For models that need processors
         self.is_loaded = False
+        self.use_fallback = False  # Track if using fallback model
         
     def _get_device(self, device_str: str) -> torch.device:
         """Get torch device object"""

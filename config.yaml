@@ -2,14 +2,21 @@
 
 # Model settings
 model:
-  ace_step_model_path: "models/ace-step"
-  lyrics_mind_model_path: "models/lyricmind"
+  # Primary models (used locally when available)
+  ace_step_model_path: "models/ace-step"  # ACE-Step for high-quality music with vocals
+  lyrics_mind_model_path: "models/lyricmind"  # LyricsMindAI for song lyrics generation
+  
+  # Other models
   demucs_model: "htdemucs"
   sovits_model_path: "models/sovits"
   musiccontrolnet_model_path: "models/musiccontrolnet"
   audiosr_model_path: "models/audiosr"
   device: "cuda"  # cuda, rocm, or cpu
   use_gpu: true
+  
+  # NOTE: On HuggingFace Spaces, fallback models are used automatically:
+  # - facebook/musicgen-large (instead of ACE-Step - lower quality, no vocals)
+  # - gpt2 (instead of LyricsMindAI - not optimized for lyrics)
 
 # Audio settings
 audio:

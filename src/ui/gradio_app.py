@@ -165,13 +165,27 @@ class EmmaUI:
     def create_interface(self) -> gr.Blocks:
         """Create the Gradio interface"""
         
+        # Check if using fallback models
+        import os
+        is_hf_space = os.getenv('SPACE_ID') is not None
+        fallback_warning = ""
+        if is_hf_space:
+            fallback_warning = """
+            > ⚠️ **Note**: Running on HuggingFace Spaces with fallback models:
+            > - Using MusicGen-Large (lower quality than ACE-Step, no vocal generation)
+            > - Using GPT-2 for lyrics (not optimized for song lyrics like LyricsMindAI)
+            > 
+            > For best results, run EMMA locally with proper model weights.
+            """
+        
         with gr.Blocks(title="EMMA - Experimental Music Making Algorithm") as app:
-            gr.Markdown("""
+            gr.Markdown(f"""
             # 🎵 EMMA - Experimental Music Making Algorithm
             
             AI-powered music generation and enhancement platform
             
             **Created by Gamahea / LEMM Project** | Making AI music free and open source for all
+            {fallback_warning}
             """)
             
             with gr.Tab("🎼 Generate Music"):

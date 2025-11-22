@@ -27,18 +27,43 @@ class ACEStepModel(BaseModel):
     def load(self) -> None:
         """Load music generation model"""
         try:
-            logger.info("Loading music generation model...")
-            
-            from transformers import AutoProcessor, MusicgenForConditionalGeneration
+            import os
             import torch
             
-            # Use Facebook's MusicGen model as the base
-            model_name = self.model_path or "facebook/musicgen-small"
+            # Check if running on HuggingFace Spaces
+            is_hf_space = os.getenv('SPACE_ID') is not None
             
-            self.processor = AutoProcessor.from_pretrained(model_name)
-            self.model = MusicgenForConditionalGeneration.from_pretrained(model_name)
-            self.model = self.model.to(self.device)
-            self.model.eval()
+            # Try to load ACE-Step first (local/preferred)
+            if not is_hf_space and self.model_path:
+                logger.info("Loading ACE-Step model...")
+                try:
+                    # TODO: Implement actual ACE-Step loading when available
+                    # from acestep import ACEStepGenerator
+                    # self.processor = ACEStepGenerator.get_processor()
+                    # self.model = ACEStepGenerator.from_pretrained(self.model_path)
+                    # self.model = self.model.to(self.device)
+                    # self.model.eval()
+                    # self.use_fallback = False
+                    
+                    # For now, raise to trigger fallback
+                    raise ImportError("ACE-Step not yet available")
+                    
+                except (ImportError, FileNotFoundError) as e:
+                    logger.warning(f"ACE-Step not available: {e}. Using fallback model.")
+                    is_hf_space = True  # Force fallback
+            
+            # Fallback to MusicGen on HuggingFace Spaces or when ACE-Step unavailable
+            if is_hf_space or not self.model_path:
+                logger.info("Loading MusicGen fallback model (large)...")
+                from transformers import AutoProcessor, MusicgenForConditionalGeneration
+                
+                model_name = "facebook/musicgen-large"
+                self.processor = AutoProcessor.from_pretrained(model_name)
+                self.model = MusicgenForConditionalGeneration.from_pretrained(model_name)
+                self.model = self.model.to(self.device)
+                self.model.eval()
+                self.use_fallback = True
+                logger.warning("Using MusicGen-large as fallback. Note: Inferior quality and no vocals.")
             
             self.is_loaded = True
             logger.info("Music generation model loaded successfully")
