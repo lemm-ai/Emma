@@ -76,8 +76,7 @@ class EmmaUI:
         lyrics: str,
         timeline_position: str,
         auto_lyrics: bool,
-        duration: int = 30,
-        device: Optional[str] = None
+        duration: int = 30
     ):
         """Generate music clip"""
         try:
@@ -118,21 +117,6 @@ class EmmaUI:
                 except Exception as e:
                     logger.warning(f"Could not export timeline as reference: {e}")
             
-            # If the user requested a different backend/device at generation time,
-            # reinitialize the music pipeline with that device so the correct
-            # runtime (e.g., ONNX/DirectML) can be used.
-            if device and device != self.music_gen.device:
-                try:
-                    logger.info(f"Switching music backend from {self.music_gen.device} -> {device}; reinitializing models")
-                    # Clean up current pipeline and create a fresh one
-                    self.music_gen.cleanup()
-                    self.music_gen = MusicGenerator()
-                    # override the device preference and re-initialize
-                    self.music_gen.device = device
-                    self.music_gen.initialize()
-                except Exception as e:
-                    logger.warning(f"Could not reinitialize pipeline for device {device}: {e}")
-
             # Generate music
             # Note: Disable stem separation on HF Spaces to avoid errors
             import os
@@ -784,22 +768,6 @@ class EmmaUI:
                                 label="Duration (seconds)",
                                 info="Generate clips from 5 seconds to 5 minutes"
                             )
-                            # Device/backend selection (auto-detected)
-                            from ..utils.accelerator import detect_backends, choose_preferred_backend
-                            backends = detect_backends()
-                            backend_choices = []
-                            if backends.get('cuda'):
-                                backend_choices.append('cuda')
-                            if backends.get('rocm'):
-                                backend_choices.append('rocm')
-                            if backends.get('onnx_dml'):
-                                backend_choices.append('onnx_dml')
-                            if backends.get('onnx') and 'onnx_dml' not in backend_choices:
-                                backend_choices.append('onnx')
-                            backend_choices.append('cpu')
-
-                            default_backend = choose_preferred_backend(settings.model.device)
-                            device_select = gr.Dropdown(choices=backend_choices, value=default_backend, label="Backend / Device")
                         
                         with gr.Row():
                             generate_btn = gr.Button("🎵 Generate Music", variant="primary", size="lg", scale=3)
@@ -921,7 +889,7 @@ class EmmaUI:
             # Update generate button to refresh timeline and library displays
             generate_btn.click(
                 fn=gpu_generate_music,
-                inputs=[prompt_input, lyrics_input, timeline_position, auto_lyrics_check, duration_slider, device_select],
+                inputs=[prompt_input, lyrics_input, timeline_position, auto_lyrics_check, duration_slider],
                 outputs=[audio_output, status_text, enhance_audio_input, timeline_display, library_display, upload_status, error_log_textbox]
             )
             
@@ -1025,11 +993,16 @@ def _get_ui_instance():
 # GPU-decorated wrapper functions for HuggingFace Spaces ZeroGPU
 if HAS_SPACES:
     import traceback
+    import inspect
+    # try to record call signatures to help debug runtime wrapper issues on hosted Spaces
     @spaces.GPU
-    def gpu_generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration, device):
+    def gpu_generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration):
         """GPU-accelerated music generation wrapper"""
         try:
-            result = _get_ui_instance().generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration, device)
+            logger.debug(f"gpu_generate_music called (HAS_SPACES): args={prompt, lyrics, timeline_position, auto_lyrics, duration}")
+            # log the function spec for sanity
+            logger.debug(f"gpu_generate_music spec: {inspect.getfullargspec(gpu_generate_music)}")
+            result = _get_ui_instance().generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration)
             # Add empty error log on success
             if isinstance(result, tuple):
                 return (*result, "",)
@@ -1046,9 +1019,12 @@ if HAS_SPACES:
 else:
     # No-op wrappers for local development
     import traceback
-    def gpu_generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration, device):
+    import inspect
+    def gpu_generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration):
         try:
-            result = _get_ui_instance().generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration, device)
+            logger.debug(f"gpu_generate_music called (local): args={prompt, lyrics, timeline_position, auto_lyrics, duration}")
+            logger.debug(f"gpu_generate_music spec: {inspect.getfullargspec(gpu_generate_music)}")
+            result = _get_ui_instance().generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration)
             if isinstance(result, tuple):
                 return (*result, "",)
             else:
