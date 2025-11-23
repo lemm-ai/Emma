@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 import logging
 import torch
+from ..utils.device_utils import detect_device
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +33,11 @@ class BaseModel(ABC):
         
     def _get_device(self, device_str: str) -> torch.device:
         """Get torch device object"""
-        if device_str in ["cuda", "rocm"]:
-            if torch.cuda.is_available():
+        if device_str in ["cuda", "rocm", "auto"]:
+            if device_str == "auto":
+                device_str = detect_device()
+            
+            if torch.cuda.is_available() and device_str in ["cuda", "rocm"]:
                 return torch.device("cuda")
             else:
                 logger.warning(f"{device_str} requested but not available, using CPU")

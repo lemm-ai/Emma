@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 import logging
+from ..utils.device_utils import detect_device
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ class ModelConfig:
     sovits_model_path: str = ""
     musiccontrolnet_model_path: str = ""
     audiosr_model_path: str = ""
-    device: str = "cuda"  # cuda, rocm, or cpu
+    device: str = "auto"  # auto, cuda, rocm, or cpu
     use_gpu: bool = True
     
     # Fallback model settings for HuggingFace Spaces compatibility
@@ -69,6 +70,12 @@ class Settings:
         
         # Initialize sub-configs
         self.model = ModelConfig(**self.config.get('model', {}))
+        
+        # Handle auto device detection
+        if self.model.device == "auto":
+            self.model.device = detect_device()
+            logger.info(f"Auto-detected device: {self.model.device}")
+            
         self.audio = AudioConfig(**self.config.get('audio', {}))
         self.database = DatabaseConfig(**self.config.get('database', {}))
         self.ui = UIConfig(**self.config.get('ui', {}))
