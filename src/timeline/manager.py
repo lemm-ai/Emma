@@ -112,6 +112,7 @@ class TimelineManager:
         
         # Update total duration
         self._update_total_duration()
+        logger.info(f"Timeline now has {len(self.clips)} clips; total_duration={self.total_duration:.2f}s")
         
         logger.info(f"Added clip {clip_id} at position {position} (start: {start_time:.2f}s)")
         return clip_id

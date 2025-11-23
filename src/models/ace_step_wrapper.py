@@ -104,6 +104,10 @@ class ACEStepModel(BaseModel):
             raise RuntimeError("Model not loaded. Call load() first.")
         
         try:
+            # Safety: MusicGen (fallback) can fail on very long durations / cause CUDA asserts.
+            # Prevent overly long requests on fallback models.
+            if getattr(self, 'use_fallback', False) and duration > 120:
+                raise ValueError("Requested duration too long for fallback model: MusicGen fallback supports up to 120s. Reduce duration or run ACE-Step locally.")
             logger.info(f"Generating music with prompt: {prompt[:50]}...")
             
             import torch

@@ -168,6 +168,13 @@ class EmmaUI:
                     'duration': result['duration']
                 }
             )
+            # Log timeline state after adding clip for debugging
+            try:
+                t_info = self.timeline.get_info()
+                logger.info(f"Timeline after add_clip - total_duration: {t_info.get('total_duration')}, num_clips: {t_info.get('num_clips')}")
+                print(f"[DEBUG] Timeline after add_clip - total_duration: {t_info.get('total_duration')}, num_clips: {t_info.get('num_clips')}")
+            except Exception as e:
+                logger.warning(f"Unable to fetch timeline info after add_clip: {e}")
             
             # Save to library
             output_path = f"output/clips/{clip_id}.wav"
@@ -351,11 +358,16 @@ class EmmaUI:
                 """
             
             total_duration = timeline_data.get('total_duration', 0)
+            # Ensure timeline display spans at least 15 minutes (900s) so clips don't occupy the whole canvas
+            min_display_seconds = 15 * 60
+            display_total = max(total_duration, min_display_seconds)
             clips = timeline_data.get('clips', [])
             
             # Generate timeline ruler with better contrast
             ruler_html = '<div style="display: flex; margin-bottom: 8px; padding: 0 10px; font-size: 11px; color: #333; font-weight: 500; background: #e8e8e8; border-radius: 4px; padding: 4px 10px;">'
-            num_markers = min(int(total_duration) + 1, 20)
+            # Choose markers at sensible intervals depending on display length (every 30s up to 60 markers)
+            marker_interval = max(1, int(display_total / 60))  # roughly 60 markers
+            num_markers = min(int(display_total // marker_interval) + 1, 60)
             for i in range(num_markers):
                 ruler_html += f'<div style="flex: 1; text-align: center;">{i}s</div>'
             ruler_html += '</div>'
@@ -420,6 +432,11 @@ class EmmaUI:
                     const a = document.getElementById('timeline_audio');
                     if(!a) return; a.pause(); a.currentTime = 0;
                 }
+                function playTimelineFrom(seconds) {
+                    const a = document.getElementById('timeline_audio');
+                    if(!a || !a.src) { alert('No timeline audio available for playback.'); return; }
+                    a.currentTime = seconds; a.play();
+                }
             </script>
             '''
             
@@ -432,15 +449,16 @@ class EmmaUI:
                 duration = clip.get('duration', 0)
                 
                 # Calculate position and width as percentage
-                left_percent = (start_time / total_duration * 100) if total_duration > 0 else 0
-                width_percent = (duration / total_duration * 100) if total_duration > 0 else 10
+                # Use display_total for positioning so we can render on a fixed timeline scale
+                left_percent = (start_time / display_total * 100) if display_total > 0 else 0
+                width_percent = (duration / display_total * 100) if display_total > 0 else 0
                 
                 # Generate random color based on clip_id
                 hue = hash(clip.get('id', '')) % 360
                 color = f"hsl({hue}, 70%, 60%)"
                 
                 clips_html += f'''
-                <div style="position: absolute; left: {left_percent}%; width: {width_percent}%; height: 60px; 
+                <div onclick="playTimelineFrom({start_time:.2f})" style="position: absolute; left: {left_percent}%; width: {width_percent}%; height: 60px; 
                      background: {color}; border-radius: 12px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
                      overflow: hidden; cursor: pointer; transition: transform 0.2s;" 
                      onmouseover="this.style.transform='scale(1.05)'" 
@@ -461,7 +479,7 @@ class EmmaUI:
             <div style="background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 12px rgba(0,0,0,0.1);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <h4 style="margin: 0; color: #333;">🎼 Timeline</h4>
-                    <span style="color: #666; font-size: 13px;">Total: {total_duration:.1f}s | {len(clips)} clips</span>
+                    <span style="color: #666; font-size: 13px;">Total (actual): {total_duration:.1f}s | Display scale: {display_total:.0f}s | {len(clips)} clips</span>
                 </div>
                 {controls_html}
                 {ruler_html}
