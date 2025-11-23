@@ -996,12 +996,25 @@ if HAS_SPACES:
     import inspect
     # try to record call signatures to help debug runtime wrapper issues on hosted Spaces
     @spaces.GPU
-    def gpu_generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration):
+    def gpu_generate_music(*args, **kwargs):
         """GPU-accelerated music generation wrapper"""
         try:
-            logger.debug(f"gpu_generate_music called (HAS_SPACES): args={prompt, lyrics, timeline_position, auto_lyrics, duration}")
-            # log the function spec for sanity
-            logger.debug(f"gpu_generate_music spec: {inspect.getfullargspec(gpu_generate_music)}")
+            # args may be (prompt, lyrics, timeline_position, auto_lyrics) or include duration as 5th arg
+            logger.debug(f"gpu_generate_music called (HAS_SPACES) raw args={args} kwargs={kwargs}")
+            # Normalize inputs to (prompt, lyrics, timeline_position, auto_lyrics, duration)
+            if len(args) >= 5:
+                prompt, lyrics, timeline_position, auto_lyrics, duration = args[:5]
+            elif len(args) == 4:
+                prompt, lyrics, timeline_position, auto_lyrics = args
+                duration = kwargs.get('duration', 30)
+            else:
+                # try to pull from kwargs, else error
+                prompt = kwargs.get('prompt')
+                lyrics = kwargs.get('lyrics')
+                timeline_position = kwargs.get('timeline_position')
+                auto_lyrics = kwargs.get('auto_lyrics')
+                duration = kwargs.get('duration', 30)
+            logger.debug(f"gpu_generate_music normalized: prompt={prompt}, duration={duration}")
             result = _get_ui_instance().generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration)
             # Add empty error log on success
             if isinstance(result, tuple):
@@ -1020,10 +1033,21 @@ else:
     # No-op wrappers for local development
     import traceback
     import inspect
-    def gpu_generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration):
+    def gpu_generate_music(*args, **kwargs):
         try:
-            logger.debug(f"gpu_generate_music called (local): args={prompt, lyrics, timeline_position, auto_lyrics, duration}")
-            logger.debug(f"gpu_generate_music spec: {inspect.getfullargspec(gpu_generate_music)}")
+            logger.debug(f"gpu_generate_music called (local) raw args={args} kwargs={kwargs}")
+            if len(args) >= 5:
+                prompt, lyrics, timeline_position, auto_lyrics, duration = args[:5]
+            elif len(args) == 4:
+                prompt, lyrics, timeline_position, auto_lyrics = args
+                duration = kwargs.get('duration', 30)
+            else:
+                prompt = kwargs.get('prompt')
+                lyrics = kwargs.get('lyrics')
+                timeline_position = kwargs.get('timeline_position')
+                auto_lyrics = kwargs.get('auto_lyrics')
+                duration = kwargs.get('duration', 30)
+            logger.debug(f"gpu_generate_music normalized (local): prompt={prompt}, duration={duration}")
             result = _get_ui_instance().generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration)
             if isinstance(result, tuple):
                 return (*result, "",)
