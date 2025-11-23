@@ -1,15 +1,3 @@
----
-title: EMMA - AI Music Generator
-emoji: 🎵
-colorFrom: purple
-colorTo: pink
-sdk: gradio
-sdk_version: 4.44.1
-app_file: app.py
-pinned: false
-license: apache-2.0
----
-
 # EMMA - Experimental Music Making Algorithm
 
 <div align="center">

@@ -1,0 +1,48 @@
+# EMMA Configuration File
+
+# Model settings
+model:
+  # Primary models (used locally when available)
+  ace_step_model_path: "models/ace-step"  # ACE-Step for high-quality music with vocals
+  lyrics_mind_model_path: "models/lyricmind"  # LyricsMindAI for song lyrics generation
+  
+  # Other models
+  demucs_model: "htdemucs"
+  sovits_model_path: "models/sovits"
+  musiccontrolnet_model_path: "models/musiccontrolnet"
+  audiosr_model_path: "models/audiosr"
+  device: "rocm"  # cuda, rocm, or cpu
+  use_gpu: true
+  
+  # NOTE: On HuggingFace Spaces, fallback models are used automatically:
+  # - facebook/musicgen-large (instead of ACE-Step - lower quality, no vocals)
+  # - gpt2 (instead of LyricsMindAI - not optimized for lyrics)
+
+# Audio settings
+audio:
+  sample_rate: 48000
+  clip_duration: 32
+  lead_in_duration: 2
+  lead_out_duration: 2
+  core_duration: 28
+  output_format: "wav"  # wav or mp3
+  num_stems: 4
+
+# Database settings
+database:
+  db_type: "sqlite"  # sqlite or firebase
+  sqlite_path: "data/emma_clips.db"
+  firebase_config: null
+
+# UI settings
+ui:
+  theme: "default"
+  share: false
+  server_name: "0.0.0.0"
+  server_port: 7860
+
+# Logging settings
+logging:
+  level: "INFO"
+  log_file: "logs/emma.log"
+  console: true
