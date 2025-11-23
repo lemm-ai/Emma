@@ -104,6 +104,18 @@ The current deployment is a framework. For full functionality:
 - Verify model paths are correct
 - Ensure dependencies are installed
 
+### ONNX / DirectML Notes
+If you want to enable ONNX Runtime DirectML (recommended for AMD GPUs on Windows):
+
+- Install the DirectML-enabled ONNX Runtime package locally or in your deployment environment:
+
+```powershell
+pip install onnxruntime-directml
+```
+
+- Make sure `config.yaml` points `model.ace_step_model_path` to a compatible ONNX export and select `onnx_dml` in the UI backend dropdown.
+
+
 ### Out of Memory
 - HF Spaces have memory limits
 - May need to optimize model loading
