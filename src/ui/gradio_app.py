@@ -732,7 +732,7 @@ class EmmaUI:
                     """)
                     
                     # Visual Timeline (persistent across tabs)
-                    timeline_display = gr.HTML(value=self.get_timeline_html(), label="Timeline")
+                    timeline_display = gr.HTML(value=self.get_timeline_html())
                     
                     with gr.Tab("🎼 Generate Music"):
                         prompt_input = gr.Textbox(
@@ -875,7 +875,7 @@ class EmmaUI:
                 
                 # Clip Library Sidebar (persistent across all tabs)
                 with gr.Column(scale=1, elem_classes="clip-library-sidebar"):
-                    library_display = gr.HTML(value=self.get_clip_library_html(), label="Clip Library")
+                    library_display = gr.HTML(value=self.get_clip_library_html())
                     upload_status = gr.Textbox(label="Upload Status", interactive=False, lines=2)
             
             # Connect button callbacks after all components are defined
@@ -992,9 +992,9 @@ def _get_ui_instance():
 # GPU-decorated wrapper functions for HuggingFace Spaces ZeroGPU
 if HAS_SPACES:
     @spaces.GPU
-    def gpu_generate_music(prompt, lyrics, timeline_position, auto_lyrics):
+    def gpu_generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration):
         """GPU-accelerated music generation wrapper"""
-        return _get_ui_instance().generate_music(prompt, lyrics, timeline_position, auto_lyrics)
+        return _get_ui_instance().generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration)
     
     @spaces.GPU
     def gpu_apply_mastering(audio_input, preset):
@@ -1002,8 +1002,8 @@ if HAS_SPACES:
         return _get_ui_instance().apply_mastering(audio_input, preset)
 else:
     # No-op wrappers for local development
-    def gpu_generate_music(prompt, lyrics, timeline_position, auto_lyrics):
-        return _get_ui_instance().generate_music(prompt, lyrics, timeline_position, auto_lyrics)
+    def gpu_generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration):
+        return _get_ui_instance().generate_music(prompt, lyrics, timeline_position, auto_lyrics, duration)
     
     def gpu_apply_mastering(audio_input, preset):
         return _get_ui_instance().apply_mastering(audio_input, preset)
