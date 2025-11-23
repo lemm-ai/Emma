@@ -9,7 +9,6 @@ from typing import Optional, Tuple, List
 import numpy as np
 from datetime import datetime
 from pathlib import Path
-import base64
 import os
 
 # Import spaces for HuggingFace ZeroGPU support
@@ -368,6 +367,7 @@ class EmmaUI:
                 preview_path.parent.mkdir(parents=True, exist_ok=True)
                 # Export combined timeline to preview path
                 try:
+                    # export a mixed timeline preview (timeline.export already mixes clips)
                     self.timeline.export(str(preview_path))
                 except Exception:
                     # If export fails, try using the most recent clip
@@ -378,12 +378,10 @@ class EmmaUI:
                         clip_id = latest.get('id', '')
                         candidate = Path(f"output/clips/{clip_id}.wav")
                         if candidate.exists():
-                            with open(candidate, 'rb') as f:
-                                timeline_audio_src = "data:audio/wav;base64," + base64.b64encode(f.read()).decode('ascii')
+                            timeline_audio_src = f"/file={candidate.as_posix()}"
                 else:
                     if preview_path.exists():
-                        with open(preview_path, 'rb') as f:
-                            timeline_audio_src = "data:audio/wav;base64," + base64.b64encode(f.read()).decode('ascii')
+                        timeline_audio_src = f"/file={preview_path.as_posix()}"
 
             except Exception as e:
                 logger.debug(f"Could not prepare timeline preview audio: {e}")
@@ -507,8 +505,7 @@ class EmmaUI:
                 try:
                     fp = Path(clip.file_path) if getattr(clip, 'file_path', None) else None
                     if fp and fp.exists():
-                        with open(fp, 'rb') as f:
-                            audio_src = "data:audio/wav;base64," + base64.b64encode(f.read()).decode('ascii')
+                        audio_src = f"/file={fp.as_posix()}"
                 except Exception as e:
                     logger.debug(f"Could not embed audio for clip {clip_id}: {e}")
 
