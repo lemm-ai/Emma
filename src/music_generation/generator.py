@@ -48,11 +48,29 @@ class MusicGenerator:
             self.lyrics_gen.load()
             
             # Initialize music generator
-            self.music_gen = ACEStepModel(
-                model_path=settings.model.ace_step_model_path,
-                device=self.device
-            )
-            self.music_gen.load()
+            # Support ONNX/DirectML via ONNXModel wrapper when device hints at onnx
+            if 'onnx' in (self.device or '').lower() or 'directml' in (self.device or '').lower():
+                try:
+                    from ..models.onnx_wrapper import ONNXModel
+                    logger.info("Using ONNX Runtime music model wrapper based on requested device")
+                    self.music_gen = ONNXModel(
+                        model_path=settings.model.ace_step_model_path,
+                        device=self.device
+                    )
+                    self.music_gen.load()
+                except Exception as e:
+                    logger.warning(f"Failed to initialize ONNXModel for device {self.device}: {e}. Falling back to ACE-Step/MusicGen path.")
+                    self.music_gen = ACEStepModel(
+                        model_path=settings.model.ace_step_model_path,
+                        device=self.device
+                    )
+                    self.music_gen.load()
+            else:
+                self.music_gen = ACEStepModel(
+                    model_path=settings.model.ace_step_model_path,
+                    device=self.device
+                )
+                self.music_gen.load()
             
             # Initialize stem separator
             self.stem_sep = StemSeparator(
