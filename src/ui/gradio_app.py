@@ -9,6 +9,7 @@ from typing import Optional, Tuple, List
 import numpy as np
 from datetime import datetime
 from pathlib import Path
+import base64
 import os
 
 # Import spaces for HuggingFace ZeroGPU support
@@ -360,6 +361,33 @@ class EmmaUI:
                 ruler_html += f'<div style="flex: 1; text-align: center;">{i}s</div>'
             ruler_html += '</div>'
             
+            # Try to create a timeline preview audio for playback controls (export timeline -> encode as data URI)
+            timeline_audio_src = None
+            try:
+                preview_path = Path('output/timeline_preview.wav')
+                preview_path.parent.mkdir(parents=True, exist_ok=True)
+                # Export combined timeline to preview path
+                try:
+                    self.timeline.export(str(preview_path))
+                except Exception:
+                    # If export fails, try using the most recent clip
+                    clips_sorted = sorted(clips, key=lambda c: c.get('start_time', 0))
+                    if clips_sorted:
+                        latest = clips_sorted[-1]
+                        # find corresponding library file if present
+                        clip_id = latest.get('id', '')
+                        candidate = Path(f"output/clips/{clip_id}.wav")
+                        if candidate.exists():
+                            with open(candidate, 'rb') as f:
+                                timeline_audio_src = "data:audio/wav;base64," + base64.b64encode(f.read()).decode('ascii')
+                else:
+                    if preview_path.exists():
+                        with open(preview_path, 'rb') as f:
+                            timeline_audio_src = "data:audio/wav;base64," + base64.b64encode(f.read()).decode('ascii')
+
+            except Exception as e:
+                logger.debug(f"Could not prepare timeline preview audio: {e}")
+
             # Playback controls
             controls_html = '''
             <div style="display: flex; gap: 8px; margin-bottom: 10px; padding: 8px; background: #f0f0f0; border-radius: 8px;">
@@ -379,10 +407,21 @@ class EmmaUI:
                     ⏹ Stop
                 </button>
             </div>
+            <audio id="timeline_audio" style="display:none;" src="{timeline_audio_src if timeline_audio_src else ''}"></audio>
             <script>
-                function playTimeline() { alert('Timeline playback not yet implemented - export and use audio player'); }
-                function pauseTimeline() { alert('Timeline playback not yet implemented - export and use audio player'); }
-                function stopTimeline() { alert('Timeline playback not yet implemented - export and use audio player'); }
+                function playTimeline() {
+                    const a = document.getElementById('timeline_audio');
+                    if(!a || !a.src) { alert('No timeline audio available for playback.'); return; }
+                    a.play();
+                }
+                function pauseTimeline() {
+                    const a = document.getElementById('timeline_audio');
+                    if(!a) return; a.pause();
+                }
+                function stopTimeline() {
+                    const a = document.getElementById('timeline_audio');
+                    if(!a) return; a.pause(); a.currentTime = 0;
+                }
             </script>
             '''
             
@@ -439,7 +478,7 @@ class EmmaUI:
             return f'<div style="padding: 20px; color: red;">Error loading timeline: {str(e)}</div>'
     
     def get_clip_library_html(self):
-        """Generate HTML for clip library sidebar with bubble-style clips"""
+        """Generate HTML for clip library sidebar with bubble-style clips and playable previews"""
         try:
             clips = self.clip_library.search_clips("")
             if not clips:
@@ -449,116 +488,81 @@ class EmmaUI:
                     <p style="font-size: 12px;">Generate or upload clips to see them here</p>
                 </div>
                 """
-            
+
             clips_html = '<div style="display: flex; flex-direction: column; gap: 12px; padding: 10px;">'
-            
+
             for clip in clips:
                 clip_id = clip.clip_id
                 short_id = clip_id[:8]
                 name = clip.name or "Untitled"
                 duration = clip.duration
                 prompt_preview = (clip.prompt[:40] + "...") if len(clip.prompt) > 40 else clip.prompt
-                
+
                 # Color based on clip_id
                 hue = hash(clip_id) % 360
                 color = f"hsl({hue}, 65%, 55%)"
-                
+
+                # Prepare audio data URI if file exists
+                audio_src = ""
+                try:
+                    fp = Path(clip.file_path) if getattr(clip, 'file_path', None) else None
+                    if fp and fp.exists():
+                        with open(fp, 'rb') as f:
+                            audio_src = "data:audio/wav;base64," + base64.b64encode(f.read()).decode('ascii')
+                except Exception as e:
+                    logger.debug(f"Could not embed audio for clip {clip_id}: {e}")
+
                 clips_html += f'''
-                <div style="background: {color}; border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); 
-                     transition: transform 0.2s, box-shadow 0.2s;" 
+                <div style="background: {color}; border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: transform 0.2s, box-shadow 0.2s;"
                      onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.25)'"
-                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.15)'">
+                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.15)'>
                     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
                         <div style="flex: 1;">
-                            <div style="font-weight: bold; color: white; font-size: 13px; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">
-                                {name}
-                            </div>
-                            <div style="font-size: 11px; color: rgba(255,255,255,0.85); margin-top: 2px;">
-                                {short_id}... • {duration:.1f}s
-                            </div>
+                            <div style="font-weight: bold; color: white; font-size: 13px; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">{name}</div>
+                            <div style="font-size: 11px; color: rgba(255,255,255,0.85); margin-top: 2px;">{short_id}... • {duration:.1f}s</div>
                         </div>
                     </div>
-                    <div style="font-size: 11px; color: rgba(255,255,255,0.9); margin-bottom: 8px; line-height: 1.3;">
-                        {prompt_preview}
-                    </div>
-                    
-                    <!-- Mini playback controls -->
+                    <div style="font-size: 11px; color: rgba(255,255,255,0.9); margin-bottom: 8px; line-height: 1.3;">{prompt_preview}</div>
+
                     <div style="display: flex; gap: 4px; margin-bottom: 8px; padding: 6px; background: rgba(0,0,0,0.15); border-radius: 6px;">
-                        <button onclick="playClip('{clip_id}')" 
-                                style="flex: 1; padding: 4px; background: rgba(255,255,255,0.2); border: none; border-radius: 4px; 
-                                color: white; font-size: 16px; cursor: pointer; transition: background 0.2s;"
-                                onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                                onmouseout="this.style.background='rgba(255,255,255,0.2)'">
-                            ▶
-                        </button>
-                        <button onclick="pauseClip('{clip_id}')" 
-                                style="flex: 1; padding: 4px; background: rgba(255,255,255,0.2); border: none; border-radius: 4px; 
-                                color: white; font-size: 16px; cursor: pointer; transition: background 0.2s;"
-                                onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                                onmouseout="this.style.background='rgba(255,255,255,0.2)'">
-                            ⏸
-                        </button>
-                        <button onclick="stopClip('{clip_id}')" 
-                                style="flex: 1; padding: 4px; background: rgba(255,255,255,0.2); border: none; border-radius: 4px; 
-                                color: white; font-size: 16px; cursor: pointer; transition: background 0.2s;"
-                                onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                                onmouseout="this.style.background='rgba(255,255,255,0.2)'">
-                            ⏹
-                        </button>
+                        <button onclick="playClip('{clip_id}')" style="flex: 1; padding: 4px; background: rgba(255,255,255,0.2); border: none; border-radius: 4px; color: white; font-size: 16px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'>▶</button>
+                        <button onclick="pauseClip('{clip_id}')" style="flex: 1; padding: 4px; background: rgba(255,255,255,0.2); border: none; border-radius: 4px; color: white; font-size: 16px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'>⏸</button>
+                        <button onclick="stopClip('{clip_id}')" style="flex: 1; padding: 4px; background: rgba(255,255,255,0.2); border: none; border-radius: 4px; color: white; font-size: 16px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'>⏹</button>
                     </div>
-                    
-                    <!-- Icon action buttons -->
+
+                    <audio id="clip_audio_{clip_id}" src="{audio_src}" preload="none" style="display:none"></audio>
+
                     <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                        <button onclick="handleClipAction('{clip_id}', 'rename')" title="Rename"
-                                style="flex: 1; min-width: 40px; padding: 8px; background: rgba(255,255,255,0.25); 
-                                border: none; border-radius: 6px; color: white; font-size: 16px; cursor: pointer; 
-                                transition: background 0.2s;"
-                                onmouseover="this.style.background='rgba(255,255,255,0.35)'"
-                                onmouseout="this.style.background='rgba(255,255,255,0.25)'">
-                            ✏️
-                        </button>
-                        <button onclick="handleClipAction('{clip_id}', 'extend')" title="Extend Clip"
-                                style="flex: 1; min-width: 40px; padding: 8px; background: rgba(255,255,255,0.25); 
-                                border: none; border-radius: 6px; color: white; font-size: 16px; cursor: pointer; 
-                                transition: background 0.2s;"
-                                onmouseover="this.style.background='rgba(255,255,255,0.35)'"
-                                onmouseout="this.style.background='rgba(255,255,255,0.25)'">
-                            🔄
-                        </button>
-                        <button onclick="handleClipAction('{clip_id}', 'download')" title="Download"
-                                style="flex: 1; min-width: 40px; padding: 8px; background: rgba(255,255,255,0.25); 
-                                border: none; border-radius: 6px; color: white; font-size: 16px; cursor: pointer;
-                                transition: background 0.2s;"
-                                onmouseover="this.style.background='rgba(255,255,255,0.35)'"
-                                onmouseout="this.style.background='rgba(255,255,255,0.25)'">
-                            📥
-                        </button>
-                        <button onclick="handleClipAction('{clip_id}', 'delete')" title="Delete"
-                                style="flex: 1; min-width: 40px; padding: 8px; background: rgba(255,0,0,0.3); 
-                                border: none; border-radius: 6px; color: white; font-size: 16px; cursor: pointer;
-                                transition: background 0.2s;"
-                                onmouseover="this.style.background='rgba(255,0,0,0.45)'"
-                                onmouseout="this.style.background='rgba(255,0,0,0.3)'">
-                            🗑️
-                        </button>
+                        <button onclick="handleClipAction('{clip_id}', 'rename')" title="Rename" style="flex: 1; min-width: 40px; padding: 8px; background: rgba(255,255,255,0.25); border: none; border-radius: 6px; color: white; font-size: 16px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.35)'" onmouseout="this.style.background='rgba(255,255,255,0.25)'>✏️</button>
+                        <button onclick="handleClipAction('{clip_id}', 'extend')" title="Extend Clip" style="flex: 1; min-width: 40px; padding: 8px; background: rgba(255,255,255,0.25); border: none; border-radius: 6px; color: white; font-size: 16px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.35)'" onmouseout="this.style.background='rgba(255,255,255,0.25)'>🔄</button>
+                        <button onclick="handleClipAction('{clip_id}', 'download')" title="Download" style="flex: 1; min-width: 40px; padding: 8px; background: rgba(255,255,255,0.25); border: none; border-radius: 6px; color: white; font-size: 16px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.35)'" onmouseout="this.style.background='rgba(255,255,255,0.25)'>📥</button>
+                        <button onclick="handleClipAction('{clip_id}', 'delete')" title="Delete" style="flex: 1; min-width: 40px; padding: 8px; background: rgba(255,0,0,0.3); border: none; border-radius: 6px; color: white; font-size: 16px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,0,0,0.45)'" onmouseout="this.style.background='rgba(255,0,0,0.3)'>🗑️</button>
                     </div>
                 </div>
-                <script>
-                    function playClip(id) {{ alert('Clip playback not yet implemented. Use Download to get audio file.'); }}
-                    function pauseClip(id) {{ alert('Clip playback not yet implemented'); }}
-                    function stopClip(id) {{ alert('Clip playback not yet implemented'); }}
-                    function handleClipAction(id, action) {{ 
-                        if (action === 'extend') {{
-                            alert('Extend: Clear timeline and place clip at start for extension (not yet implemented)');
-                        }} else {{
-                            alert(action.charAt(0).toUpperCase() + action.slice(1) + ' action not yet implemented'); 
-                        }}
-                    }}
-                </script>
+
                 '''
-            
+
+            # Add JS handlers for clip controls at the end
+            clips_html += '''
+                <script>
+                    function playClip(id) {
+                        // Stop other audio first
+                        document.querySelectorAll('audio').forEach(a=>{try{a.pause()}catch(e){}});
+                        const a = document.getElementById('clip_audio_'+id);
+                        if(!a || !a.src) { alert('Clip audio not available. Please download or try again.'); return; }
+                        a.currentTime = 0; a.play();
+                    }
+                    function pauseClip(id) { const a = document.getElementById('clip_audio_'+id); if(a) a.pause(); }
+                    function stopClip(id) { const a = document.getElementById('clip_audio_'+id); if(a) { a.pause(); a.currentTime = 0; } }
+                    function handleClipAction(id, action) { 
+                        if (action === 'extend') { alert('Extend: Clear timeline and place clip at start for extension (not yet implemented)'); }
+                        else { alert(action.charAt(0).toUpperCase() + action.slice(1) + ' action not yet implemented'); }
+                    }
+                </script>
+            '''
+
             clips_html += '</div>'
-            
+
             header_html = '''
             <div style="padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                  border-radius: 12px 12px 0 0; color: white;">
@@ -570,19 +574,7 @@ class EmmaUI:
         except Exception as e:
             logger.error(f"Error generating clip library HTML: {e}")
             return f'<div style="padding: 20px; color: red;">Error: {str(e)}</div>'
-        """Get formatted timeline information"""
-        try:
-            timeline_data = self.timeline.get_info()
-            if not timeline_data or not timeline_data.get('clips'):
-                return "Timeline is empty. Generate music and it will be added automatically."
-            
-            info_lines = [f"Total Duration: {timeline_data.get('total_duration', 0):.2f}s"]
-            info_lines.append(f"Number of Clips: {timeline_data.get('num_clips', 0)}")
-            
-            return "\n".join(info_lines)
-        except Exception as e:
-            logger.error(f"Error getting timeline info: {e}")
-            return f"Error loading timeline: {str(e)}"
+        
     
     def get_timeline_clips_dataframe(self):
         """Get timeline clips as DataFrame data"""
