@@ -72,7 +72,7 @@ class ONNXModel(BaseModel):
             except Exception:
                 pass
 
-    def infer(self, prompt: str, lyrics: Optional[str] = None, duration: int = 32, reference_audio: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
+    def infer(self, prompt: str = None, lyrics: Optional[str] = None, duration: int = 32, reference_audio: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
         """Run inference on ONNX model.
 
         Note: This is a best-effort shim — the ONNX model must accept the
@@ -82,23 +82,85 @@ class ONNXModel(BaseModel):
         if not self.is_loaded or self.session is None:
             raise RuntimeError("ONNX model session not initialized. Call load() first and ensure model_path points to a valid ONNX file.")
 
-        # Build inputs in a best-effort way. ONNX models vary widely; we try common
-        # names like 'input_ids', 'prompt', 'text' — otherwise we raise a clear error.
-        input_names = [i.name for i in self.session.get_inputs()]
-        inputs = {}
+        # Build inputs in a best-effort way. ONNX models vary widely so we try
+        # to support simple numeric models for smoke testing (toy models) as
+        # well as detect when text/token inputs are required and raise useful
+        # errors so callers can add custom mapping logic.
+        input_meta = self.session.get_inputs()
+        input_names = [i.name for i in input_meta]
 
-        # Attempt to find a sensible text input field
-        if 'input_ids' in input_names:
-            # User must supply tokenized inputs — we can't do that generically here
-            raise NotImplementedError("ONNXModel inference requires tokenized 'input_ids' input. Convert your model and provide a wrapper that tokenizes text to input_ids.")
+        # If the model expects tokenized inputs like 'input_ids', surface
+        # an explicit error so the developer knows they must convert text->ids
+        if any('input_ids' == n for n in input_names):
+            raise NotImplementedError("ONNXModel inference requires tokenized 'input_ids'. Provide tokenized inputs or extend ONNXModel.infer().")
 
-        if 'text' in input_names or 'prompt' in input_names:
-            field = 'text' if 'text' in input_names else 'prompt'
-            # Many ONNX models expect arrays of bytes or ints; we cannot reliably convert here
-            raise NotImplementedError("ONNX inference requires a validated input mapping. Please provide an ONNX model that accepts tokenized or numeric inputs, or extend ONNXModel.infer() to match your model's input schema.")
+        # If the model expects a text/prompt input then this wrapper cannot
+        # map arbitrary raw text without model-specific logic.
+        if any(n in ('text', 'prompt', 'prompt_text') for n in input_names):
+            raise NotImplementedError("ONNXModel found text-like input names; please adapt ONNXModel.infer() to map prompt->model input for your model.")
 
-        # If no known mapping, raise an informative error
-        raise RuntimeError(f"ONNX model inputs {input_names} are unknown. Provide a compatible ONNX export or extend ONNXModel.infer to map prompt/duration -> model inputs.")
+        # Otherwise assume the model is numeric and create zero-filled tensors
+        # for each input, trying to respect static shapes. Dynamic shapes will
+        # get small defaults and may be influenced by `duration`.
+        feeds = {}
+        for meta in input_meta:
+            name = meta.name
+            shape = []
+            for dim in meta.shape:
+                # ONNX may provide None or string for dynamic axes
+                if isinstance(dim, int) and dim > 0:
+                    shape.append(dim)
+                else:
+                    # Choose a sensible default for dynamic dimensions
+                    # Use 1 for batch dims, and duration-derived sizes for sample dims
+                    if len(shape) == 0:
+                        shape.append(1)
+                    else:
+                        # Use duration to produce additional samples
+                        shape.append(max(1, int(duration * 10)))
+
+            # Create zeros of type float32
+            feeds[name] = np.zeros(tuple(shape), dtype=np.float32)
+
+        # Run the session
+        outputs = self.session.run(None, feeds)
+
+        if not outputs:
+            raise RuntimeError("ONNX model returned no outputs")
+
+        out0 = outputs[0]
+        out = np.array(out0)
+
+        # Normalize shape to (channels, samples) for downstream code. If the
+        # output is 1D, replicate it to stereo. If it looks like (batch, L),
+        # take first batch. If shape is (channels, samples) already, keep it.
+        if out.ndim == 1:
+            audio = np.stack([out, out], axis=0)
+        elif out.ndim == 2:
+            # Heuristic: if first dim is batch, reduce to first element
+            if out.shape[0] == 1:
+                vec = out[0]
+                audio = np.stack([vec, vec], axis=0)
+            elif out.shape[0] == 2:
+                audio = out
+            else:
+                # Unknown layout; try transposing if that yields channels-first
+                if out.shape[0] < out.shape[1]:
+                    audio = out
+                else:
+                    audio = out.T
+                    if audio.shape[0] != 2:
+                        # fallback: make stereo by duplicating first row
+                        audio = np.stack([audio[0], audio[0]], axis=0)
+        else:
+            # For higher dims, collapse last dimension
+            flattened = out.reshape(out.shape[0], -1)
+            if flattened.shape[0] == 2:
+                audio = flattened
+            else:
+                audio = np.stack([flattened[0], flattened[0]], axis=0)
+
+        return audio
 
     def get_clip_segments(self, audio: np.ndarray) -> Dict[str, np.ndarray]:
         sample_rate = 48000

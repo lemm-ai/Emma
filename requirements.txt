@@ -20,6 +20,8 @@ sentencepiece>=0.1.99
 safetensors>=0.4.0
 einops>=0.7.0
 omegaconf>=2.3.0
+onnx>=1.15.0
+onnxruntime>=1.16.0
 
 # Web UI
 gradio==4.44.1
