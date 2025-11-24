@@ -702,22 +702,7 @@ class EmmaUI:
             > For best results, run EMMA locally with proper model weights.
             """
         
-        with gr.Blocks(title="EMMA - Experimental Music Making Algorithm", css="""
-            .clip-library-sidebar {
-                position: fixed !important;
-                right: 0;
-                top: 0;
-                height: 100vh;
-                width: 320px;
-                overflow-y: auto;
-                background: #fafafa;
-                border-left: 1px solid #e0e0e0;
-                z-index: 1000;
-            }
-            .main-content {
-                margin-right: 340px;
-            }
-        """) as app:
+        with gr.Blocks(title="EMMA - Experimental Music Making Algorithm") as app:
             # Main layout with sidebar
             with gr.Row():
                 # Main content area
@@ -775,7 +760,7 @@ class EmmaUI:
                         
                         with gr.Row():
                             audio_output = gr.Audio(label="Generated Music")
-                            status_text = gr.Textbox(label="Status", interactive=False)
+                            status_text = gr.Textbox(label="Status")
                     
                     with gr.Tab("🎚️ Audio Enhancement"):
                         enhance_audio_input = gr.Audio(label="Audio Input")
@@ -844,7 +829,7 @@ class EmmaUI:
                         apply_custom_fx_btn = gr.Button("Apply Custom EQ & Effects", variant="secondary")
                         
                         enhanced_output = gr.Audio(label="Enhanced Audio")
-                        enhance_status = gr.Textbox(label="Status", interactive=False)
+                        enhance_status = gr.Textbox(label="Status")
                     
                     with gr.Tab("ℹ️ About"):
                         gr.Markdown("""
@@ -876,7 +861,7 @@ class EmmaUI:
                 # Clip Library Sidebar (persistent across all tabs)
                 with gr.Column(scale=1, elem_classes="clip-library-sidebar"):
                     library_display = gr.HTML(value=self.get_clip_library_html())
-                    upload_status = gr.Textbox(label="Upload Status", interactive=False, lines=2)
+                    upload_status = gr.Textbox(label="Upload Status", lines=2)
             
             # Connect button callbacks after all components are defined
             gen_lyrics_btn.click(
